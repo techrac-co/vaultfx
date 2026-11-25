@@ -29,7 +29,9 @@ import androidx.compose.material.icons.automirrored.rounded.CallMade
 import androidx.compose.material.icons.automirrored.rounded.CallReceived
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Refresh
@@ -95,10 +97,14 @@ fun WalletScreen(
   incomingTransfers: List<PeerTransfer>,
   escrows: List<EscrowDeal>,
   marketSnapshot: MarketSnapshot,
+  pendingOfflineDebits: Map<String, Double> = emptyMap(),
+  isBiometricProtected: Boolean = true,
+  onOpenSecuritySettings: () -> Unit = {},
   onOpenSend: (String?) -> Unit,
   onOpenReceive: (String?) -> Unit,
   onOpenDeposit: () -> Unit,
   onOpenEscrowTab: () -> Unit,
+  onOpenOfflineTab: () -> Unit = {},
   onChangePreferredFiat: (String) -> Unit,
   onClaimTransfer: (PeerTransfer) -> Unit,
   onRetryInitialize: () -> Unit,
@@ -121,6 +127,11 @@ fun WalletScreen(
   val totalDisplayValue = remember(totalUsd, displayCode, marketSnapshot) {
     marketSnapshot.convert(totalUsd, "USD", displayCode)
   }
+
+  val pendingOfflineUsd = remember(pendingOfflineDebits, marketSnapshot) {
+    pendingOfflineDebits.entries.sumOf { (code, amt) -> amt * marketSnapshot.usdValueOf(code) }
+  }
+  val pendingOfflineDisplay = marketSnapshot.convert(pendingOfflineUsd, "USD", displayCode)
 
   val actionableEscrowsCount = remember(escrows, currentUserId) {
     escrows.count { needsUserAction(it, currentUserId) }
@@ -308,6 +319,100 @@ fun WalletScreen(
                 Spacer(Modifier.width(4.dp))
                 Text("Retry")
               }
+            }
+          }
+        }
+      }
+
+      // Biometric Security Shield Quick Card
+      item {
+        BouncySurface(
+          onClick = onOpenSecuritySettings,
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("wallet_biometric_card"),
+          color = if (isBiometricProtected) vaultColors.cyan.copy(alpha = 0.12f) else vaultColors.goldContainer,
+          shape = RoundedCornerShape(18.dp),
+          border = BorderStroke(
+            1.1.dp,
+            if (isBiometricProtected) vaultColors.cyan.copy(alpha = 0.5f) else vaultColors.gold.copy(alpha = 0.6f),
+          ),
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Fingerprint,
+              contentDescription = null,
+              tint = if (isBiometricProtected) vaultColors.positive else vaultColors.gold,
+              modifier = Modifier.size(26.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = if (isBiometricProtected) "Biometric Vault Shield Active" else "Enable Biometric Protection",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+              )
+              Text(
+                text = if (isBiometricProtected) {
+                  "App entry & transactions protected by Fingerprint / Face ID"
+                } else {
+                  "Tap to enroll Fingerprint, Face Unlock, or a 6-digit Vault PIN"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            Text(
+              text = "Manage →",
+              style = MaterialTheme.typography.labelLarge,
+              color = if (isBiometricProtected) vaultColors.cyan else vaultColors.gold,
+            )
+          }
+        }
+      }
+
+      // Pending Offline Queue Alert Banner
+      if (pendingOfflineUsd > 0.0) {
+        item {
+          BouncySurface(
+            onClick = onOpenOfflineTab,
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("wallet_offline_alert"),
+            color = vaultColors.goldContainer,
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(1.2.dp, vaultColors.gold.copy(alpha = 0.7f)),
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Icon(Icons.Rounded.CloudOff, contentDescription = null, tint = vaultColors.gold, modifier = Modifier.size(26.dp))
+              Spacer(Modifier.width(12.dp))
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "Pending Offline Deduction: ${displayAsset.symbol}${NumberFormatter.formatAsset(pendingOfflineDisplay, 2)}",
+                  style = MaterialTheme.typography.titleSmall,
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                  text = "Encrypted in local vault; will deduct automatically once back online.",
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+              Text(
+                text = "Vault →",
+                style = MaterialTheme.typography.labelLarge,
+                color = vaultColors.gold,
+              )
             }
           }
         }

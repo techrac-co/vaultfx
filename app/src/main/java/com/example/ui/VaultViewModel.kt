@@ -3,9 +3,14 @@ package com.example.ui
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.DecryptedVaultTransaction
 import com.example.data.MarketRatesRepository
 import com.example.data.MarketSnapshot
+import com.example.data.NetworkMonitor
+import com.example.data.OfflineVaultRepository
+import com.example.data.VaultIntegrityReport
 import com.example.data.VaultRepository
+import com.example.data.local.OfflineSyncStatus
 import com.example.model.AssetCatalog
 import com.example.model.CalcHistoryEntry
 import com.example.model.EscrowDeal
@@ -31,6 +36,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
@@ -47,6 +54,7 @@ enum class MainTab(val label: String) {
   PAIRS("Pairs"),
   TRADE("Trade"),
   ESCROW("Escrow"),
+  OFFLINE("Offline"),
   WALLET("Wallet"),
 }
 
@@ -75,6 +83,8 @@ class VaultViewModel(
   private val marketRepository: MarketRatesRepository,
   private val currentUserId: String,
   private val initialDisplayName: String,
+  private val offlineRepository: OfflineVaultRepository? = null,
+  private val networkMonitor: NetworkMonitor? = null,
 ) : ViewModel() {
 
   private val _currentTab = MutableStateFlow(MainTab.CALCULATOR)
@@ -99,6 +109,41 @@ class VaultViewModel(
   val isSubmittingEscrow: StateFlow<Boolean> = _isSubmittingEscrow.asStateFlow()
 
   private val _inFlightOps = MutableStateFlow<Set<String>>(emptySet())
+
+  private val _manualOfflineHold = MutableStateFlow(false)
+  val manualOfflineHold: StateFlow<Boolean> = _manualOfflineHold.asStateFlow()
+
+  private val _isSyncingOffline = MutableStateFlow(false)
+  val isSyncingOffline: StateFlow<Boolean> = _isSyncingOffline.asStateFlow()
+
+  private val _isQueueingOffline = MutableStateFlow(false)
+  val isQueueingOffline: StateFlow<Boolean> = _isQueueingOffline.asStateFlow()
+
+  private val _integrityReport = MutableStateFlow<VaultIntegrityReport?>(null)
+  val integrityReport: StateFlow<VaultIntegrityReport?> = _integrityReport.asStateFlow()
+
+  val isDeviceOnline: StateFlow<Boolean> = networkMonitor?.isDeviceOnline ?: MutableStateFlow(true)
+
+  val isEffectivelyOffline: StateFlow<Boolean> = combine(isDeviceOnline, _manualOfflineHold) { online, hold ->
+    !online || hold
+  }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+  val offlineTransactions: StateFlow<List<DecryptedVaultTransaction>> =
+    (offlineRepository?.observeDecryptedTransactions(currentUserId) ?: emptyFlow())
+      .catch { error -> Log.w(TAG, "Error observing encrypted vault ledger", error) }
+      .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+  val pendingOfflineDebits: StateFlow<Map<String, Double>> = offlineTransactions
+    .map { list ->
+      val totals = mutableMapOf<String, Double>()
+      for (tx in list) {
+        if (tx.syncStatus == OfflineSyncStatus.QUEUED_OFFLINE || tx.syncStatus == OfflineSyncStatus.SYNCING) {
+          totals[tx.assetCode] = (totals[tx.assetCode] ?: 0.0) + tx.amount
+        }
+      }
+      totals.toMap()
+    }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyMap())
 
   val marketSnapshot: StateFlow<MarketSnapshot> = marketRepository.snapshot
 
@@ -143,6 +188,36 @@ class VaultViewModel(
       while (isActive) {
         marketRepository.refreshRates()
         delay(60_000L)
+      }
+    }
+    if (offlineRepository != null) {
+      viewModelScope.launch {
+        transactionsState.collect { state ->
+          if (state is UiState.Success && state.data.isNotEmpty()) {
+            offlineRepository.archiveSyncedTransactions(currentUserId, state.data)
+          }
+        }
+      }
+      viewModelScope.launch {
+        offlineTransactions.collect {
+          _integrityReport.value = offlineRepository.verifyFullDatabaseIntegrity(currentUserId)
+        }
+      }
+      viewModelScope.launch {
+        combine(
+          isEffectivelyOffline,
+          offlineTransactions.map { list ->
+            list.any {
+              it.syncStatus == OfflineSyncStatus.QUEUED_OFFLINE || it.syncStatus == OfflineSyncStatus.SYNCING
+            }
+          },
+        ) { offline, hasPending -> !offline && hasPending }
+          .distinctUntilChanged()
+          .collect { shouldSync ->
+            if (shouldSync) {
+              syncOfflineQueue(manual = false)
+            }
+          }
       }
     }
   }
@@ -628,6 +703,122 @@ class VaultViewModel(
         _inFlightOps.value = _inFlightOps.value - opKey
       }
     }
+  }
+
+  // --- Offline Encrypted Vault Actions ---
+  fun setOfflineHold(hold: Boolean) {
+    _manualOfflineHold.value = hold
+    if (hold) {
+      _events.tryEmit("Offline Hold active: sends encrypt locally and deduct when back online")
+    }
+  }
+
+  fun queueOfflineSend(
+    senderTag: String,
+    assetCode: String,
+    amount: Double,
+    recipientInput: String,
+    note: String?,
+    holdings: List<WalletHolding>,
+    onSuccess: (DecryptedVaultTransaction) -> Unit,
+  ) {
+    val offlineRepo = offlineRepository ?: run {
+      _events.tryEmit("Offline vault unavailable")
+      return
+    }
+    val onlineBalance = holdings.firstOrNull { it.assetCode == assetCode }?.balance ?: 0.0
+    val priceUsd = marketSnapshot.value.usdValueOf(assetCode)
+    viewModelScope.launch {
+      _isQueueingOffline.value = true
+      try {
+        offlineRepo.queueOfflineSend(
+          userId = currentUserId,
+          senderTag = senderTag,
+          assetCode = assetCode,
+          amount = amount,
+          priceUsd = priceUsd,
+          recipientInput = recipientInput,
+          note = note,
+          availableOnlineBalance = onlineBalance,
+        ).onSuccess { tx ->
+          _events.tryEmit("Encrypted & queued $amount $assetCode offline (${tx.integrityMacPreview}…)")
+          onSuccess(tx)
+        }.onFailure { err ->
+          _events.tryEmit(err.localizedMessage ?: "Could not queue offline transaction")
+        }
+      } finally {
+        _isQueueingOffline.value = false
+      }
+    }
+  }
+
+  fun cancelOfflineTransaction(txId: String) {
+    val offlineRepo = offlineRepository ?: return
+    viewModelScope.launch {
+      offlineRepo.cancelQueuedOfflineSend(currentUserId, txId)
+        .onSuccess { _events.tryEmit("Cancelled offline transfer and released reserved balance") }
+        .onFailure { _events.tryEmit(it.localizedMessage ?: "Cancel failed") }
+    }
+  }
+
+  fun retryFailedOfflineTransaction(txId: String) {
+    val offlineRepo = offlineRepository ?: return
+    viewModelScope.launch {
+      offlineRepo.retryFailedTransaction(currentUserId, txId)
+      if (!isEffectivelyOffline.value) {
+        syncOfflineQueue(manual = true)
+      }
+    }
+  }
+
+  fun syncOfflineQueue(manual: Boolean = true) {
+    val offlineRepo = offlineRepository ?: return
+    if (isEffectivelyOffline.value) {
+      if (manual) _events.tryEmit("Still offline — queued transfers will settle when back online")
+      return
+    }
+    if (_isSyncingOffline.value) return
+    viewModelScope.launch {
+      _isSyncingOffline.value = true
+      try {
+        val profileTag = (profileState.value as? UiState.Success)?.data?.payTag ?: "vault_user"
+        val summary = offlineRepo.syncPendingTransactions(
+          userId = currentUserId,
+          senderTag = profileTag,
+          marketSnapshot = marketSnapshot.value,
+        )
+        when {
+          summary.settledCount > 0 && summary.failedCount == 0 ->
+            _events.tryEmit("Synced & deducted ${summary.settledCount} offline transfer${if (summary.settledCount > 1) "s" else ""}")
+          summary.settledCount > 0 && summary.failedCount > 0 ->
+            _events.tryEmit("Settled ${summary.settledCount}; ${summary.failedCount} failed (${summary.firstError ?: "check vault"})")
+          summary.failedCount > 0 ->
+            _events.tryEmit(summary.firstError ?: "Offline settlement failed")
+          manual && summary.remainingQueuedCount == 0 ->
+            _events.tryEmit("All encrypted offline transfers are settled")
+        }
+      } finally {
+        _isSyncingOffline.value = false
+      }
+    }
+  }
+
+  fun verifyOfflineVaultIntegrity() {
+    val offlineRepo = offlineRepository ?: return
+    viewModelScope.launch {
+      val report = offlineRepo.verifyFullDatabaseIntegrity(currentUserId)
+      _integrityReport.value = report
+      if (report.tamperedRecords == 0) {
+        _events.tryEmit("Verified ${report.verifiedRecords}/${report.totalRecords} AES-256-GCM + HMAC records")
+      } else {
+        _events.tryEmit("Warning: ${report.tamperedRecords} record(s) failed integrity verification")
+      }
+    }
+  }
+
+  override fun onCleared() {
+    super.onCleared()
+    networkMonitor?.release()
   }
 
   private companion object {

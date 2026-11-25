@@ -24,9 +24,15 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AddModerator
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -40,8 +46,12 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import com.example.security.BiometricHardwareStatus
+import com.example.security.VaultBiometricManager
+import com.example.security.VaultSecuritySettings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -275,6 +285,8 @@ fun SendCryptoSheet(
   initialAssetCode: String,
   initialAmount: Double?,
   isSending: Boolean,
+  isEffectivelyOffline: Boolean = false,
+  pendingOfflineDebits: Map<String, Double> = emptyMap(),
   onLookupPayTag: suspend (String) -> Result<PayTagEntry?>,
   onSend: (assetCode: String, amount: Double, recipient: String, note: String?) -> Unit,
   onDismiss: () -> Unit,
@@ -299,9 +311,9 @@ fun SendCryptoSheet(
   var matchedPeer by remember { mutableStateOf<PayTagEntry?>(null) }
   var pickingCrypto by remember { mutableStateOf(false) }
 
-  LaunchedEffect(recipient) {
+  LaunchedEffect(recipient, isEffectivelyOffline) {
     val clean = recipient.trim().removePrefix("@").lowercase()
-    if (clean.matches(Regex("^[a-z0-9_]{3,32}$"))) {
+    if (!isEffectivelyOffline && clean.matches(Regex("^[a-z0-9_]{3,32}$"))) {
       delay(300)
       matchedPeer = onLookupPayTag(clean).getOrNull()
     } else {
@@ -310,12 +322,16 @@ fun SendCryptoSheet(
   }
 
   val asset = AssetCatalog.find(assetCode)
-  val available = holdings.firstOrNull { it.assetCode == assetCode }?.balance ?: 0.0
+  val onlineBalance = holdings.firstOrNull { it.assetCode == assetCode }?.balance ?: 0.0
+  val reservedOffline = pendingOfflineDebits[assetCode] ?: 0.0
+  val available = (onlineBalance - reservedOffline).coerceAtLeast(0.0)
   val amount = amountText.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
   val usdEquivalent = amount * marketSnapshot.usdValueOf(assetCode)
   val hasEnough = amount > 0.0 && amount <= available + 1e-10
   val peer = matchedPeer
-  val isSelfTag = peer != null && peer.ownerUid == profile?.userId
+  val cleanRecipientTag = recipient.trim().removePrefix("@").lowercase()
+  val isSelfTag = (peer != null && peer.ownerUid == profile?.userId) ||
+    (profile?.payTag?.isNotBlank() == true && cleanRecipientTag == profile.payTag.lowercase())
 
   ModalBottomSheet(
     onDismissRequest = onDismiss,
@@ -454,6 +470,29 @@ fun SendCryptoSheet(
           .testTag("send_note_input"),
       )
 
+      if (isEffectivelyOffline) {
+        Spacer(Modifier.height(10.dp))
+        Surface(
+          color = vaultColors.goldContainer,
+          shape = RoundedCornerShape(12.dp),
+          border = BorderStroke(1.dp, vaultColors.gold.copy(alpha = 0.5f)),
+          modifier = Modifier.fillMaxWidth(),
+        ) {
+          Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Icon(Icons.Rounded.CloudOff, contentDescription = null, tint = vaultColors.gold, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+              text = "Offline mode: will encrypt in Room DB and deduct automatically when online.",
+              style = MaterialTheme.typography.labelMedium,
+              color = MaterialTheme.colorScheme.onSurface,
+            )
+          }
+        }
+      }
+
       Spacer(Modifier.height(18.dp))
       Button(
         onClick = { onSend(assetCode, amount, recipient, note.takeIf { it.isNotBlank() }) },
@@ -470,7 +509,7 @@ fun SendCryptoSheet(
           Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(Modifier.width(8.dp))
           Text(
-            text = "Send ${asset.code} Now",
+            text = if (isEffectivelyOffline) "Encrypt & Queue ${asset.code} Offline" else "Send ${asset.code} Now",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
           )
         }
@@ -952,12 +991,22 @@ fun CalcHistorySheet(
 fun ProfileSheet(
   profile: UserProfile?,
   userEmail: String?,
+  securitySettings: VaultSecuritySettings = VaultSecuritySettings(),
+  hardwareStatus: BiometricHardwareStatus = BiometricHardwareStatus.UNAVAILABLE,
+  onToggleAppLock: (Boolean) -> Unit = {},
+  onToggleTxConfirmation: (Boolean) -> Unit = {},
+  onOpenSetupPin: () -> Unit = {},
+  onRemoveVaultPin: () -> Unit = {},
+  onOpenBiometricEnroll: () -> Unit = {},
+  onLockNow: () -> Unit = {},
   onSignOut: () -> Unit,
   onDismiss: () -> Unit,
 ) {
   val vaultColors = LocalVaultColors.current
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val payTag = profile?.payTag?.takeIf { it.isNotBlank() }
+  val canUseBiometrics = hardwareStatus == BiometricHardwareStatus.BIOMETRIC_READY ||
+    hardwareStatus == BiometricHardwareStatus.DEVICE_CREDENTIAL_ONLY
 
   ModalBottomSheet(
     onDismissRequest = onDismiss,
@@ -967,6 +1016,7 @@ fun ProfileSheet(
     Column(
       modifier = Modifier
         .fillMaxWidth()
+        .verticalScroll(rememberScrollState())
         .padding(horizontal = 20.dp)
         .padding(bottom = 28.dp),
     ) {
@@ -975,7 +1025,7 @@ fun ProfileSheet(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        Text("VaultFX Account", style = MaterialTheme.typography.titleLarge)
+        Text("Account & Security", style = MaterialTheme.typography.titleLarge)
         IconButton(onClick = onDismiss) {
           Icon(Icons.Rounded.Close, contentDescription = "Close profile sheet")
         }
@@ -1007,6 +1057,159 @@ fun ProfileSheet(
               style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFontFamily),
               color = vaultColors.gold,
             )
+          }
+        }
+      }
+
+      Spacer(Modifier.height(14.dp))
+      Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(
+          1.dp,
+          if (canUseBiometrics || securitySettings.hasVaultPin) vaultColors.positive.copy(alpha = 0.45f) else vaultColors.gold.copy(alpha = 0.55f),
+        ),
+        modifier = Modifier.fillMaxWidth(),
+      ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(
+                imageVector = Icons.Rounded.Fingerprint,
+                contentDescription = null,
+                tint = if (canUseBiometrics) vaultColors.positive else vaultColors.gold,
+                modifier = Modifier.size(22.dp),
+              )
+              Spacer(Modifier.width(8.dp))
+              Column {
+                Text("Biometric Security", style = MaterialTheme.typography.titleSmall)
+                Text(
+                  text = VaultBiometricManager.statusDisplayLabel(hardwareStatus, securitySettings.hasVaultPin),
+                  style = MaterialTheme.typography.labelSmall,
+                  color = if (canUseBiometrics || securitySettings.hasVaultPin) vaultColors.positive else vaultColors.gold,
+                )
+              }
+            }
+            Icon(
+              imageVector = Icons.Rounded.VerifiedUser,
+              contentDescription = null,
+              tint = vaultColors.cyan,
+              modifier = Modifier.size(18.dp),
+            )
+          }
+
+          HorizontalDivider(color = vaultColors.cardBorder.copy(alpha = 0.5f))
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+              Text("App Entry Lock", style = MaterialTheme.typography.titleSmall)
+              Text(
+                text = "Require Fingerprint, Face, or Vault PIN whenever opening VaultFX",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            Switch(
+              checked = securitySettings.appLockEnabled,
+              onCheckedChange = onToggleAppLock,
+              modifier = Modifier.testTag("toggle_app_biometric_lock"),
+            )
+          }
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+              Text("Transaction Confirmation", style = MaterialTheme.typography.titleSmall)
+              Text(
+                text = "Verify identity before sends, trades, offline queue & escrow actions",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            Switch(
+              checked = securitySettings.txConfirmationEnabled,
+              onCheckedChange = onToggleTxConfirmation,
+              modifier = Modifier.testTag("toggle_tx_biometric_confirm"),
+            )
+          }
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            OutlinedButton(
+              onClick = onOpenSetupPin,
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier
+                .weight(1f)
+                .height(46.dp)
+                .testTag("profile_setup_pin_button"),
+            ) {
+              Icon(Icons.Rounded.Key, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(6.dp))
+              Text(if (securitySettings.hasVaultPin) "Change PIN" else "Set Vault PIN")
+            }
+
+            if (securitySettings.hasVaultPin) {
+              OutlinedButton(
+                onClick = onRemoveVaultPin,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = vaultColors.negative),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                  .height(46.dp)
+                  .testTag("profile_remove_pin_button"),
+              ) {
+                Text("Clear PIN")
+              }
+            }
+          }
+
+          if (hardwareStatus != BiometricHardwareStatus.BIOMETRIC_READY) {
+            OutlinedButton(
+              onClick = onOpenBiometricEnroll,
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(46.dp)
+                .testTag("profile_enroll_biometric_button"),
+            ) {
+              Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(6.dp))
+              Text("Enroll Device Fingerprint / Face")
+            }
+          }
+
+          if (securitySettings.appLockEnabled && (canUseBiometrics || securitySettings.hasVaultPin)) {
+            Button(
+              onClick = {
+                onDismiss()
+                onLockNow()
+              },
+              colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.primary,
+              ),
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .testTag("profile_lock_now_button"),
+            ) {
+              Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+              Spacer(Modifier.width(8.dp))
+              Text("Lock VaultFX Now", style = MaterialTheme.typography.labelLarge)
+            }
           }
         }
       }

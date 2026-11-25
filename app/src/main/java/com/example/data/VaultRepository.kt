@@ -557,6 +557,7 @@ class VaultRepository(
     priceUsd: Double,
     recipientInput: String,
     note: String?,
+    overrideTxHash: String? = null,
   ): Result<String> {
     val path = "users/$userId/holdings/$assetCode"
     return try {
@@ -567,7 +568,8 @@ class VaultRepository(
       require(trimmedRecipient.length >= 3) { "Enter a valid @payTag or wallet address" }
 
       val cleanNote = note?.trim()?.take(140)?.takeIf { it.isNotEmpty() }
-      val txHash = WalletAddressHelper.generateTxHash("$uid:$assetCode:$trimmedRecipient")
+      val txHash = overrideTxHash?.trim()?.take(96)?.takeIf { it.length >= 6 }
+        ?: WalletAddressHelper.generateTxHash("$uid:$assetCode:$trimmedRecipient")
 
       val candidateTag = trimmedRecipient.removePrefix("@").lowercase()
       val peerEntry = if (candidateTag.matches(Regex("^[a-z0-9_]{3,32}$"))) {

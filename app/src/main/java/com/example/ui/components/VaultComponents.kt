@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Brightness4
 import androidx.compose.material.icons.rounded.Brightness7
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
@@ -239,6 +240,8 @@ fun VaultTopBar(
   isRefreshing: Boolean,
   isDarkTheme: Boolean,
   payTag: String?,
+  showLockButton: Boolean = false,
+  onLockClick: () -> Unit = {},
   onRefreshClick: () -> Unit,
   onToggleTheme: () -> Unit,
   onProfileClick: () -> Unit,
@@ -255,11 +258,16 @@ fun VaultTopBar(
   Row(
     modifier = Modifier
       .fillMaxWidth()
-      .padding(horizontal = 16.dp, vertical = 10.dp),
+      .padding(horizontal = 14.dp, vertical = 10.dp),
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.SpaceBetween,
   ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      modifier = Modifier
+        .weight(1f)
+        .padding(end = 6.dp),
+    ) {
       Box(
         modifier = Modifier
           .size(38.dp)
@@ -302,7 +310,7 @@ fun VaultTopBar(
 
     Row(
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(6.dp),
+      horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
       BouncySurface(
         onClick = onRefreshClick,
@@ -354,6 +362,19 @@ fun VaultTopBar(
           contentDescription = "Toggle light or dark theme",
           tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+      }
+
+      if (showLockButton) {
+        IconButton(
+          onClick = onLockClick,
+          modifier = Modifier.testTag("top_bar_lock_button"),
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Lock,
+            contentDescription = "Lock VaultFX now",
+            tint = vaultColors.positive,
+          )
+        }
       }
 
       BouncySurface(
