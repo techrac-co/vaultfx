@@ -1,0 +1,146 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user wallet profile and preferred display currency.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the owner." },
+        "displayName": { "type": "string", "description": "Display name shown in wallet." },
+        "payTag": { "type": "string", "description": "Public handle for peer crypto transfers." },
+        "preferredFiat": { "type": "string", "enum": ["USD", "NGN", "GBP", "EUR", "CAD", "GHS", "KES", "ZAR"] },
+        "walletSeed": { "type": "string", "description": "Deterministic seed string for wallet receive addresses." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "displayName", "payTag", "preferredFiat", "walletSeed", "createdAt", "updatedAt"]
+    },
+    "PayTagEntry": {
+      "title": "PayTagEntry",
+      "description": "Public non-PII PayTag directory entry for peer-to-peer transfers and escrows.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "description": "Firebase Auth UID of the PayTag owner." },
+        "payTag": { "type": "string", "description": "Lowercase alphanumeric PayTag handle." },
+        "displayName": { "type": "string", "description": "Recipient display label." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["ownerUid", "payTag", "displayName", "createdAt", "updatedAt"]
+    },
+    "WalletHolding": {
+      "title": "WalletHolding",
+      "description": "Asset balance for a fiat or cryptocurrency in the user's wallet.",
+      "type": "object",
+      "properties": {
+        "assetCode": { "type": "string", "description": "Asset ticker code (e.g., BTC, ETH, USD, NGN, GBP)." },
+        "balance": { "type": "number", "description": "Current non-negative asset quantity." },
+        "avgBuyPriceUsd": { "type": "number", "description": "Weighted average entry price in USD." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["assetCode", "balance", "avgBuyPriceUsd", "updatedAt"]
+    },
+    "WalletTransaction": {
+      "title": "WalletTransaction",
+      "description": "Immutable ledger record for buy/sell trades, sends, receives, deposits, and escrows.",
+      "type": "object",
+      "properties": {
+        "txType": { "type": "string", "enum": ["BUY", "SELL", "SEND", "RECEIVE", "DEPOSIT", "ESCROW_LOCK", "ESCROW_RELEASE"] },
+        "assetCode": { "type": "string" },
+        "amount": { "type": "number" },
+        "quoteCode": { "type": "string" },
+        "quoteAmount": { "type": "number" },
+        "priceUsd": { "type": "number" },
+        "feeAmount": { "type": "number" },
+        "counterparty": { "type": "string" },
+        "txHash": { "type": "string" },
+        "status": { "type": "string", "enum": ["COMPLETED", "PENDING"] },
+        "note": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." }
+      },
+      "required": ["txType", "assetCode", "amount", "quoteCode", "quoteAmount", "priceUsd", "feeAmount", "counterparty", "txHash", "status", "createdAt"]
+    },
+    "SavedPair": {
+      "title": "SavedPair",
+      "description": "Pinned currency pair in the Pairs watchlist.",
+      "type": "object",
+      "properties": {
+        "baseCode": { "type": "string" },
+        "quoteCode": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." }
+      },
+      "required": ["baseCode", "quoteCode", "createdAt"]
+    },
+    "PeerTransfer": {
+      "title": "PeerTransfer",
+      "description": "Peer-to-peer crypto transfer envelope between VaultFX users.",
+      "type": "object",
+      "properties": {
+        "senderUid": { "type": "string" },
+        "senderTag": { "type": "string" },
+        "recipientUid": { "type": "string" },
+        "recipientTag": { "type": "string" },
+        "assetCode": { "type": "string" },
+        "amount": { "type": "number" },
+        "txHash": { "type": "string" },
+        "note": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "CLAIMED"] },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["senderUid", "senderTag", "recipientUid", "recipientTag", "assetCode", "amount", "txHash", "status", "createdAt", "updatedAt"]
+    },
+    "EscrowDeal": {
+      "title": "EscrowDeal",
+      "description": "Protected peer-to-peer crypto escrow contract between buyer and seller.",
+      "type": "object",
+      "properties": {
+        "buyerUid": { "type": "string" },
+        "buyerTag": { "type": "string" },
+        "sellerUid": { "type": "string" },
+        "sellerTag": { "type": "string" },
+        "participantUids": { "type": "array", "description": "Exactly 2 UIDs: [buyerUid, sellerUid]" },
+        "assetCode": { "type": "string" },
+        "amount": { "type": "number" },
+        "title": { "type": "string" },
+        "agreedTerms": { "type": "string" },
+        "txHash": { "type": "string" },
+        "status": { "type": "string", "enum": ["FUNDED", "DELIVERED", "DISPUTED", "RELEASED", "REFUNDED", "CLAIMED"] },
+        "disputeReason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["buyerUid", "buyerTag", "sellerUid", "sellerTag", "participantUids", "assetCode", "amount", "title", "txHash", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User wallet profile scoped strictly to owner."
+    },
+    "/payTags/{payTag}": {
+      "schema": { "$ref": "#/entities/PayTagEntry" },
+      "description": "Public PayTag handle lookup without PII."
+    },
+    "/users/{userId}/holdings/{assetCode}": {
+      "schema": { "$ref": "#/entities/WalletHolding" },
+      "description": "User asset balances."
+    },
+    "/users/{userId}/transactions/{txId}": {
+      "schema": { "$ref": "#/entities/WalletTransaction" },
+      "description": "Immutable user trade, escrow, and transfer ledger."
+    },
+    "/users/{userId}/savedPairs/{pairId}": {
+      "schema": { "$ref": "#/entities/SavedPair" },
+      "description": "User pinned FX and crypto pairs."
+    },
+    "/transfers/{transferId}": {
+      "schema": { "$ref": "#/entities/PeerTransfer" },
+      "description": "Peer-to-peer crypto transfer envelopes."
+    },
+    "/escrows/{escrowId}": {
+      "schema": { "$ref": "#/entities/EscrowDeal" },
+      "description": "Protected peer-to-peer crypto escrow contracts."
+    }
+  }
+}

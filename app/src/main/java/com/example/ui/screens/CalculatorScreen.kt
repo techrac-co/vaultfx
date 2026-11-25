@@ -1,0 +1,566 @@
+package com.example.ui.screens
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Backspace
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.CandlestickChart
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.SwapVert
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.data.MarketSnapshot
+import com.example.model.AssetCatalog
+import com.example.ui.CalculatorUiState
+import com.example.ui.components.AssetBadge
+import com.example.ui.components.AssetPickerSheet
+import com.example.ui.components.BouncySurface
+import com.example.ui.components.CurrencySelectorPill
+import com.example.ui.components.GradientBorderSurface
+import com.example.ui.theme.JetBrainsMonoFontFamily
+import com.example.ui.theme.LocalVaultColors
+import com.example.util.NumberFormatter
+
+@Composable
+fun CalculatorScreen(
+  calcState: CalculatorUiState,
+  marketSnapshot: MarketSnapshot,
+  onKey: (String) -> Unit,
+  onSwapCurrencies: () -> Unit,
+  onSelectCurrencies: (String, String) -> Unit,
+  onSendToTrade: () -> Unit,
+  onOpenSendSheet: (assetCode: String, amount: Double) -> Unit,
+  onOpenEscrowSheet: (assetCode: String, amount: Double) -> Unit,
+  onOpenHistory: () -> Unit,
+) {
+  val vaultColors = LocalVaultColors.current
+  val haptics = LocalHapticFeedback.current
+  var pickingBase by remember { mutableStateOf(false) }
+  var pickingTarget by remember { mutableStateOf(false) }
+  var swapRotationTarget by remember { mutableFloatStateOf(0f) }
+  val swapRotation by animateFloatAsState(
+    targetValue = swapRotationTarget,
+    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+    label = "swap_spin",
+  )
+
+  val baseAsset = remember(calcState.baseCode) { AssetCatalog.find(calcState.baseCode) }
+  val targetAsset = remember(calcState.targetCode) { AssetCatalog.find(calcState.targetCode) }
+  val convertedValue = remember(calcState.evaluatedValue, calcState.baseCode, calcState.targetCode, marketSnapshot) {
+    marketSnapshot.convert(calcState.evaluatedValue, calcState.baseCode, calcState.targetCode)
+  }
+  val unitRate = remember(calcState.baseCode, calcState.targetCode, marketSnapshot) {
+    marketSnapshot.rate(calcState.baseCode, calcState.targetCode)
+  }
+
+  // Simultaneous multi-currency strip excluding base & target
+  val multiConvertAssets = remember(calcState.baseCode, calcState.targetCode) {
+    listOf("USD", "NGN", "GBP", "EUR", "BTC", "ETH", "SOL", "USDT")
+      .filter { it != calcState.baseCode && it != calcState.targetCode }
+      .take(4)
+      .map { AssetCatalog.find(it) }
+  }
+
+  Column(
+    modifier = Modifier
+      .fillMaxSize()
+      .verticalScroll(rememberScrollState())
+      .padding(horizontal = 16.dp, vertical = 4.dp),
+    horizontalAlignment = Alignment.CenterHorizontally,
+  ) {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .widthIn(max = 580.dp),
+    ) {
+      // Glowing Dual Display Deck
+      Box(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          // Base Input & Math Expression Card
+          GradientBorderSurface(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+            shape = RoundedCornerShape(24.dp),
+            borderColors = listOf(vaultColors.positive.copy(alpha = 0.65f), vaultColors.cyan.copy(alpha = 0.45f)),
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Column(
+              modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                  Brush.radialGradient(
+                    colors = listOf(
+                      MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                      Color.Transparent,
+                    )
+                  )
+                )
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            ) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                CurrencySelectorPill(
+                  asset = baseAsset,
+                  onClick = { pickingBase = true },
+                  modifier = Modifier.testTag("calc_base_currency_pill"),
+                )
+                Text(
+                  text = calcState.expression,
+                  style = MaterialTheme.typography.bodyLarge.copy(
+                    fontFamily = JetBrainsMonoFontFamily,
+                  ),
+                  color = if (calcState.hasSyntaxError) vaultColors.negative
+                  else MaterialTheme.colorScheme.onSurfaceVariant,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  textAlign = TextAlign.End,
+                  modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp)
+                    .testTag("calc_expression_text"),
+                )
+              }
+
+              Spacer(Modifier.height(10.dp))
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+              ) {
+                Text(
+                  text = if (calcState.hasSyntaxError) "Invalid expression" else baseAsset.name,
+                  style = MaterialTheme.typography.labelMedium,
+                  color = if (calcState.hasSyntaxError) vaultColors.negative else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                AnimatedContent(
+                  targetState = NumberFormatter.formatSignedCurrency(
+                    symbol = baseAsset.symbol,
+                    value = calcState.evaluatedValue,
+                    calcStyle = true,
+                  ),
+                  transitionSpec = { fadeIn() togetherWith fadeOut() },
+                  label = "calc_base_num",
+                ) { formatted ->
+                  Text(
+                    text = formatted,
+                    style = MaterialTheme.typography.displayMedium.copy(
+                      fontFamily = JetBrainsMonoFontFamily,
+                      fontSize = 30.sp,
+                      fontWeight = FontWeight.Bold,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("calc_base_result"),
+                  )
+                }
+              }
+            }
+          }
+
+          // Target Simultaneous Conversion Card
+          GradientBorderSurface(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+            shape = RoundedCornerShape(24.dp),
+            borderColors = listOf(vaultColors.cyan.copy(alpha = 0.70f), vaultColors.violet.copy(alpha = 0.65f)),
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Column(
+              modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                  Brush.linearGradient(
+                    colors = listOf(
+                      vaultColors.cyan.copy(alpha = 0.10f),
+                      vaultColors.violet.copy(alpha = 0.08f),
+                      Color.Transparent,
+                    )
+                  )
+                )
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            ) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                CurrencySelectorPill(
+                  asset = targetAsset,
+                  onClick = { pickingTarget = true },
+                  modifier = Modifier.testTag("calc_target_currency_pill"),
+                )
+                Text(
+                  text = "1 ${baseAsset.code} = ${NumberFormatter.formatRate(unitRate)} ${targetAsset.code}",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = MaterialTheme.colorScheme.primary,
+                )
+              }
+
+              Spacer(Modifier.height(10.dp))
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+              ) {
+                Text(
+                  text = targetAsset.name,
+                  style = MaterialTheme.typography.labelMedium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                AnimatedContent(
+                  targetState = NumberFormatter.formatSignedCurrency(
+                    symbol = targetAsset.symbol,
+                    value = convertedValue,
+                    calcStyle = false,
+                    maxDecimals = targetAsset.decimals,
+                  ),
+                  transitionSpec = { fadeIn() togetherWith fadeOut() },
+                  label = "calc_target_num",
+                ) { formatted ->
+                  Text(
+                    text = formatted,
+                    style = MaterialTheme.typography.displayMedium.copy(
+                      fontFamily = JetBrainsMonoFontFamily,
+                      fontSize = 28.sp,
+                      fontWeight = FontWeight.Bold,
+                    ),
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("calc_target_result"),
+                  )
+                }
+              }
+            }
+          }
+        }
+
+        // Overlapping Rotating Swap Button
+        BouncySurface(
+          onClick = {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            swapRotationTarget += 180f
+            onSwapCurrencies()
+          },
+          modifier = Modifier
+            .align(Alignment.Center)
+            .size(44.dp)
+            .minimumInteractiveComponentSize()
+            .testTag("calc_swap_button"),
+          shape = CircleShape,
+          color = MaterialTheme.colorScheme.primary,
+          border = BorderStroke(2.dp, MaterialTheme.colorScheme.background),
+          shadowElevation = 8.dp,
+        ) {
+          Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(
+              imageVector = Icons.Rounded.SwapVert,
+              contentDescription = "Swap base and target currencies",
+              tint = MaterialTheme.colorScheme.onPrimary,
+              modifier = Modifier
+                .size(22.dp)
+                .graphicsLayer { rotationZ = swapRotation },
+            )
+          }
+        }
+      }
+
+      Spacer(Modifier.height(10.dp))
+
+      // Simultaneous Multi-Currency Live Strip
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        multiConvertAssets.forEach { asset ->
+          val valConverted = marketSnapshot.convert(calcState.evaluatedValue, calcState.baseCode, asset.code)
+          BouncySurface(
+            onClick = { onSelectCurrencies(calcState.baseCode, asset.code) },
+            modifier = Modifier.testTag("multi_strip_${asset.code}"),
+            color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, vaultColors.cardBorder),
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              AssetBadge(asset = asset, size = 22.dp)
+              Spacer(Modifier.width(7.dp))
+              Column {
+                Text(
+                  text = asset.code,
+                  style = MaterialTheme.typography.labelSmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                  text = NumberFormatter.formatSignedCurrency(
+                    symbol = asset.symbol,
+                    value = valConverted,
+                    calcStyle = false,
+                    maxDecimals = asset.decimals,
+                  ),
+                  style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFontFamily),
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+              }
+            }
+          }
+        }
+      }
+
+      Spacer(Modifier.height(10.dp))
+
+      // Quick Actions Row (Trade, Send, Escrow, History)
+      val preferredCryptoCode = if (baseAsset.category.name == "CRYPTO") baseAsset.code
+      else if (targetAsset.category.name == "CRYPTO") targetAsset.code
+      else "USDT"
+      val preferredCryptoAmt = marketSnapshot.convert(calcState.evaluatedValue.coerceAtLeast(0.0), calcState.baseCode, preferredCryptoCode)
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
+        QuickCalcActionPill(
+          icon = Icons.Rounded.CandlestickChart,
+          label = "Trade",
+          accent = MaterialTheme.colorScheme.primary,
+          onClick = onSendToTrade,
+          modifier = Modifier
+            .weight(1f)
+            .testTag("calc_to_trade_button"),
+        )
+        QuickCalcActionPill(
+          icon = Icons.AutoMirrored.Rounded.Send,
+          label = "Send",
+          accent = vaultColors.gold,
+          onClick = { onOpenSendSheet(preferredCryptoCode, preferredCryptoAmt) },
+          modifier = Modifier
+            .weight(1f)
+            .testTag("calc_to_send_button"),
+        )
+        QuickCalcActionPill(
+          icon = Icons.Rounded.Shield,
+          label = "Escrow",
+          accent = vaultColors.violet,
+          onClick = { onOpenEscrowSheet(preferredCryptoCode, preferredCryptoAmt) },
+          modifier = Modifier
+            .weight(1f)
+            .testTag("calc_to_escrow_button"),
+        )
+        QuickCalcActionPill(
+          icon = Icons.Rounded.History,
+          label = "${calcState.history.size}",
+          accent = vaultColors.cyan,
+          onClick = onOpenHistory,
+          modifier = Modifier
+            .weight(0.75f)
+            .testTag("calc_history_button"),
+        )
+      }
+
+      Spacer(Modifier.height(10.dp))
+      HorizontalDivider(color = vaultColors.cardBorder.copy(alpha = 0.5f))
+      Spacer(Modifier.height(10.dp))
+
+      // Precision Tactile Spring-Bouncy Calculator Keypad
+      val smartParen = remember(calcState.expression) {
+        val openCount = calcState.expression.count { it == '(' }
+        val closeCount = calcState.expression.count { it == ')' }
+        if (openCount > closeCount && calcState.expression.lastOrNull()?.let { it.isDigit() || it == ')' || it == '%' } == true) ")" else "("
+      }
+
+      val rows = listOf(
+        listOf("AC", smartParen, "%", "÷"),
+        listOf("7", "8", "9", "×"),
+        listOf("4", "5", "6", "-"),
+        listOf("1", "2", "3", "+"),
+        listOf("0", ".", "⌫", "="),
+      )
+
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        rows.forEach { rowKeys ->
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            rowKeys.forEach { keyLabel ->
+              val isEquals = keyLabel == "="
+              val isClear = keyLabel == "AC"
+              val isOperator = keyLabel in setOf("÷", "×", "-", "+", "%", "(", ")")
+              val isBackspace = keyLabel == "⌫"
+
+              val containerColor = when {
+                isEquals -> MaterialTheme.colorScheme.primary
+                isClear -> vaultColors.negativeContainer
+                isOperator -> MaterialTheme.colorScheme.surfaceContainerHigh
+                else -> MaterialTheme.colorScheme.surface
+              }
+              val contentColor = when {
+                isEquals -> MaterialTheme.colorScheme.onPrimary
+                isClear -> vaultColors.negative
+                isOperator -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurface
+              }
+
+              BouncySurface(
+                onClick = {
+                  haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                  onKey(keyLabel)
+                },
+                modifier = Modifier
+                  .weight(1f)
+                  .height(56.dp)
+                  .minimumInteractiveComponentSize()
+                  .testTag("calc_key_$keyLabel"),
+                color = containerColor,
+                shape = RoundedCornerShape(16.dp),
+                border = if (isEquals) null else BorderStroke(
+                  1.dp,
+                  if (isOperator) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else vaultColors.cardBorder,
+                ),
+                shadowElevation = if (isEquals) 6.dp else 1.dp,
+                pressedScale = 0.91f,
+              ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                  if (isBackspace) {
+                    Icon(
+                      imageVector = Icons.AutoMirrored.Rounded.Backspace,
+                      contentDescription = "Backspace",
+                      tint = contentColor,
+                      modifier = Modifier.size(22.dp),
+                    )
+                  } else {
+                    Text(
+                      text = keyLabel,
+                      style = MaterialTheme.typography.titleLarge.copy(
+                        fontFamily = if (isOperator || isEquals || isClear) MaterialTheme.typography.titleLarge.fontFamily else JetBrainsMonoFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 21.sp,
+                      ),
+                      color = contentColor,
+                    )
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      Spacer(Modifier.height(16.dp))
+    }
+  }
+
+  if (pickingBase) {
+    AssetPickerSheet(
+      title = "Select Base Currency",
+      selectedCode = calcState.baseCode,
+      onSelect = { onSelectCurrencies(it.code, calcState.targetCode) },
+      onDismiss = { pickingBase = false },
+    )
+  }
+
+  if (pickingTarget) {
+    AssetPickerSheet(
+      title = "Select Target Currency",
+      selectedCode = calcState.targetCode,
+      onSelect = { onSelectCurrencies(calcState.baseCode, it.code) },
+      onDismiss = { pickingTarget = false },
+    )
+  }
+}
+
+@Composable
+private fun QuickCalcActionPill(
+  icon: androidx.compose.ui.graphics.vector.ImageVector,
+  label: String,
+  accent: Color,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val vaultColors = LocalVaultColors.current
+  BouncySurface(
+    onClick = onClick,
+    modifier = modifier.minimumInteractiveComponentSize(),
+    color = MaterialTheme.colorScheme.surface,
+    shape = RoundedCornerShape(14.dp),
+    border = BorderStroke(1.dp, vaultColors.cardBorder),
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 8.dp, vertical = 10.dp),
+      horizontalArrangement = Arrangement.Center,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Icon(
+        imageVector = icon,
+        contentDescription = label,
+        tint = accent,
+        modifier = Modifier.size(16.dp),
+      )
+      Spacer(Modifier.width(5.dp))
+      Text(
+        text = label,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+    }
+  }
+}

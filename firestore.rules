@@ -1,0 +1,322 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidAssetCode(code) {
+      return code is string && code.size() >= 2 && code.size() <= 12 && code.matches('^[A-Z0-9]+$');
+    }
+
+    function isValidPayTag(tag) {
+      return tag is string && tag.size() >= 3 && tag.size() <= 32 && tag.matches('^[a-z0-9_]+$');
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             isValidPayTag(data.payTag) &&
+             data.preferredFiat in ['USD', 'NGN', 'GBP', 'EUR', 'CAD', 'GHS', 'KES', 'ZAR'] &&
+             data.walletSeed is string && data.walletSeed.size() >= 4 && data.walletSeed.size() <= 64 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPayTagEntry(data) {
+      return data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128 &&
+             isValidPayTag(data.payTag) &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidHolding(data) {
+      return isValidAssetCode(data.assetCode) &&
+             data.balance is number && data.balance >= 0 &&
+             data.avgBuyPriceUsd is number && data.avgBuyPriceUsd >= 0 &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidTransaction(data) {
+      return data.txType in ['BUY', 'SELL', 'SEND', 'RECEIVE', 'DEPOSIT', 'ESCROW_LOCK', 'ESCROW_RELEASE'] &&
+             isValidAssetCode(data.assetCode) &&
+             data.amount is number && data.amount > 0 &&
+             isValidAssetCode(data.quoteCode) &&
+             data.quoteAmount is number && data.quoteAmount >= 0 &&
+             data.priceUsd is number && data.priceUsd >= 0 &&
+             data.feeAmount is number && data.feeAmount >= 0 &&
+             data.counterparty is string && data.counterparty.size() <= 120 &&
+             data.txHash is string && data.txHash.size() >= 6 && data.txHash.size() <= 96 &&
+             data.status in ['COMPLETED', 'PENDING'] &&
+             (!('note' in data) || (data.note is string && data.note.size() <= 140)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidSavedPair(data) {
+      return isValidAssetCode(data.baseCode) &&
+             isValidAssetCode(data.quoteCode) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidTransfer(data) {
+      return data.senderUid is string && data.senderUid.size() >= 1 && data.senderUid.size() <= 128 &&
+             data.senderTag is string && data.senderTag.size() >= 2 && data.senderTag.size() <= 40 &&
+             data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid.size() <= 128 &&
+             data.recipientTag is string && data.recipientTag.size() >= 2 && data.recipientTag.size() <= 40 &&
+             isValidAssetCode(data.assetCode) &&
+             data.amount is number && data.amount > 0 &&
+             data.txHash is string && data.txHash.size() >= 6 && data.txHash.size() <= 96 &&
+             (!('note' in data) || (data.note is string && data.note.size() <= 140)) &&
+             data.status in ['PENDING', 'CLAIMED'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidEscrow(data) {
+      return data.buyerUid is string && data.buyerUid.size() >= 1 && data.buyerUid.size() <= 128 &&
+             data.buyerTag is string && data.buyerTag.size() >= 2 && data.buyerTag.size() <= 40 &&
+             data.sellerUid is string && data.sellerUid.size() >= 1 && data.sellerUid.size() <= 128 &&
+             data.sellerTag is string && data.sellerTag.size() >= 2 && data.sellerTag.size() <= 40 &&
+             data.buyerUid != data.sellerUid &&
+             data.participantUids is list &&
+             data.participantUids.size() == 2 &&
+             data.participantUids[0] == data.buyerUid &&
+             data.participantUids[1] == data.sellerUid &&
+             isValidAssetCode(data.assetCode) &&
+             data.amount is number && data.amount > 0 &&
+             data.title is string && data.title.size() >= 2 && data.title.size() <= 80 &&
+             (!('agreedTerms' in data) || (data.agreedTerms is string && data.agreedTerms.size() <= 160)) &&
+             data.txHash is string && data.txHash.size() >= 6 && data.txHash.size() <= 96 &&
+             data.status in ['FUNDED', 'DELIVERED', 'DISPUTED', 'RELEASED', 'REFUNDED', 'CLAIMED'] &&
+             (!('disputeReason' in data) || (data.disputeReason is string && data.disputeReason.size() <= 160)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isEscrowImmutableUnchanged() {
+      return incoming().buyerUid == existing().buyerUid &&
+             incoming().buyerTag == existing().buyerTag &&
+             incoming().sellerUid == existing().sellerUid &&
+             incoming().sellerTag == existing().sellerTag &&
+             incoming().participantUids == existing().participantUids &&
+             incoming().assetCode == existing().assetCode &&
+             incoming().amount == existing().amount &&
+             incoming().title == existing().title &&
+             incoming().txHash == existing().txHash &&
+             incoming().createdAt == existing().createdAt;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'payTag', 'preferredFiat', 'walletSeed', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'payTag', 'preferredFiat', 'walletSeed', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().walletSeed == existing().walletSeed &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'payTag', 'preferredFiat', 'updatedAt']);
+
+      allow delete: if false;
+
+      match /holdings/{assetCode} {
+        allow get: if isSignedIn() && request.auth.uid == userId && isValidId(assetCode);
+        allow list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         isValidId(assetCode) &&
+                         incoming().assetCode == assetCode &&
+                         incoming().keys().hasAll(['assetCode', 'balance', 'avgBuyPriceUsd', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['assetCode', 'balance', 'avgBuyPriceUsd', 'updatedAt']) &&
+                         isValidHolding(incoming());
+
+        allow update: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         isValidId(assetCode) &&
+                         isValidHolding(incoming()) &&
+                         incoming().assetCode == existing().assetCode &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'avgBuyPriceUsd', 'updatedAt']);
+
+        allow delete: if isSignedIn() && request.auth.uid == userId && isValidId(assetCode);
+      }
+
+      match /transactions/{txId} {
+        allow get: if isSignedIn() && request.auth.uid == userId && isValidId(txId);
+        allow list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         isValidId(txId) &&
+                         incoming().keys().hasAll(['txType', 'assetCode', 'amount', 'quoteCode', 'quoteAmount', 'priceUsd', 'feeAmount', 'counterparty', 'txHash', 'status', 'createdAt']) &&
+                         incoming().keys().hasOnly(['txType', 'assetCode', 'amount', 'quoteCode', 'quoteAmount', 'priceUsd', 'feeAmount', 'counterparty', 'txHash', 'status', 'note', 'createdAt']) &&
+                         isValidTransaction(incoming());
+
+        allow update: if false;
+        allow delete: if false;
+      }
+
+      match /savedPairs/{pairId} {
+        allow get: if isSignedIn() && request.auth.uid == userId && isValidId(pairId);
+        allow list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         isValidId(pairId) &&
+                         incoming().keys().hasAll(['baseCode', 'quoteCode', 'createdAt']) &&
+                         incoming().keys().hasOnly(['baseCode', 'quoteCode', 'createdAt']) &&
+                         isValidSavedPair(incoming());
+
+        allow update: if false;
+        allow delete: if isSignedIn() && request.auth.uid == userId && isValidId(pairId);
+      }
+    }
+
+    match /payTags/{payTag} {
+      allow get: if isSignedIn() && isValidPayTag(payTag);
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       isValidPayTag(payTag) &&
+                       incoming().ownerUid == request.auth.uid &&
+                       incoming().payTag == payTag &&
+                       incoming().keys().hasAll(['ownerUid', 'payTag', 'displayName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['ownerUid', 'payTag', 'displayName', 'createdAt', 'updatedAt']) &&
+                       isValidPayTagEntry(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidPayTag(payTag) &&
+                       existing().ownerUid == request.auth.uid &&
+                       isValidPayTagEntry(incoming()) &&
+                       incoming().ownerUid == existing().ownerUid &&
+                       incoming().payTag == existing().payTag &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidPayTag(payTag) && existing().ownerUid == request.auth.uid;
+    }
+
+    match /transfers/{transferId} {
+      allow get: if isSignedIn() &&
+                    isValidId(transferId) &&
+                    (existing().senderUid == request.auth.uid || existing().recipientUid == request.auth.uid);
+
+      allow list: if isSignedIn() &&
+                     (resource.data.senderUid == request.auth.uid || resource.data.recipientUid == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(transferId) &&
+                       incoming().senderUid == request.auth.uid &&
+                       incoming().recipientUid != request.auth.uid &&
+                       incoming().status == 'PENDING' &&
+                       incoming().keys().hasAll(['senderUid', 'senderTag', 'recipientUid', 'recipientTag', 'assetCode', 'amount', 'txHash', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['senderUid', 'senderTag', 'recipientUid', 'recipientTag', 'assetCode', 'amount', 'txHash', 'note', 'status', 'createdAt', 'updatedAt']) &&
+                       isValidTransfer(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(transferId) &&
+                       isValidTransfer(incoming()) &&
+                       existing().status == 'PENDING' &&
+                       incoming().status == 'CLAIMED' &&
+                       request.auth.uid == existing().recipientUid &&
+                       incoming().senderUid == existing().senderUid &&
+                       incoming().senderTag == existing().senderTag &&
+                       incoming().recipientUid == existing().recipientUid &&
+                       incoming().recipientTag == existing().recipientTag &&
+                       incoming().assetCode == existing().assetCode &&
+                       incoming().amount == existing().amount &&
+                       incoming().txHash == existing().txHash &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    match /escrows/{escrowId} {
+      allow get: if isSignedIn() &&
+                    isValidId(escrowId) &&
+                    request.auth.uid in existing().participantUids;
+
+      allow list: if isSignedIn() &&
+                     request.auth.uid in resource.data.participantUids;
+
+      allow create: if isSignedIn() &&
+                       isValidId(escrowId) &&
+                       incoming().buyerUid == request.auth.uid &&
+                       incoming().status == 'FUNDED' &&
+                       incoming().keys().hasAll(['buyerUid', 'buyerTag', 'sellerUid', 'sellerTag', 'participantUids', 'assetCode', 'amount', 'title', 'txHash', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['buyerUid', 'buyerTag', 'sellerUid', 'sellerTag', 'participantUids', 'assetCode', 'amount', 'title', 'agreedTerms', 'txHash', 'status', 'createdAt', 'updatedAt']) &&
+                       isValidEscrow(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(escrowId) &&
+                       isValidEscrow(incoming()) &&
+                       isEscrowImmutableUnchanged() &&
+                       existing().status != 'CLAIMED' &&
+                       (
+                         // Seller marks FUNDED -> DELIVERED
+                         (request.auth.uid == existing().sellerUid &&
+                          existing().status == 'FUNDED' &&
+                          incoming().status == 'DELIVERED' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+                         // Seller refunds FUNDED / DELIVERED / DISPUTED -> REFUNDED
+                         (request.auth.uid == existing().sellerUid &&
+                          existing().status in ['FUNDED', 'DELIVERED', 'DISPUTED'] &&
+                          incoming().status == 'REFUNDED' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+                         // Buyer releases FUNDED / DELIVERED / DISPUTED -> RELEASED
+                         (request.auth.uid == existing().buyerUid &&
+                          existing().status in ['FUNDED', 'DELIVERED', 'DISPUTED'] &&
+                          incoming().status == 'RELEASED' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+                         // Either participant disputes FUNDED / DELIVERED -> DISPUTED
+                         (request.auth.uid in existing().participantUids &&
+                          existing().status in ['FUNDED', 'DELIVERED'] &&
+                          incoming().status == 'DISPUTED' &&
+                          'disputeReason' in incoming() &&
+                          incoming().disputeReason.size() >= 3 &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'disputeReason', 'updatedAt'])) ||
+                         // Seller claims RELEASED -> CLAIMED (terminal)
+                         (request.auth.uid == existing().sellerUid &&
+                          existing().status == 'RELEASED' &&
+                          incoming().status == 'CLAIMED' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+                         // Buyer reclaims REFUNDED -> CLAIMED (terminal)
+                         (request.auth.uid == existing().buyerUid &&
+                          existing().status == 'REFUNDED' &&
+                          incoming().status == 'CLAIMED' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+                       );
+
+      allow delete: if false;
+    }
+  }
+}
