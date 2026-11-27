@@ -10,6 +10,8 @@ import com.example.model.SavedPair
 import com.example.model.UserProfile
 import com.example.model.WalletHolding
 import com.example.model.WalletTransaction
+import com.example.util.UsernameValidationResult
+import com.example.util.UsernameValidator
 import com.example.util.WalletAddressHelper
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
@@ -520,6 +522,124 @@ class VaultRepository(
         )
       }.await()
       Result.success(Unit)
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      handleFirestoreError(e, OperationType.WRITE, path)
+      Result.failure(e)
+    }
+  }
+
+  sealed interface UsernameAvailability {
+    data class Available(val username: String) : UsernameAvailability
+    data class OwnedByCurrentUser(val username: String) : UsernameAvailability
+    data class Taken(val username: String) : UsernameAvailability
+    data class Invalid(val reason: String) : UsernameAvailability
+  }
+
+  suspend fun checkUsernameAvailability(
+    rawUsername: String,
+    currentUserId: String,
+  ): Result<UsernameAvailability> {
+    val validation = UsernameValidator.validate(rawUsername)
+    if (validation is UsernameValidationResult.Invalid) {
+      return Result.success(UsernameAvailability.Invalid(validation.message))
+    }
+    val cleanTag = (validation as UsernameValidationResult.Valid).normalized
+    val path = "payTags/$cleanTag"
+    return try {
+      val uid = requireUserId()
+      check(uid == currentUserId)
+      val doc = db.collection("payTags").document(cleanTag).get().await()
+      val status = when {
+        !doc.exists() -> UsernameAvailability.Available(cleanTag)
+        doc.getString("ownerUid") == uid -> UsernameAvailability.OwnedByCurrentUser(cleanTag)
+        else -> UsernameAvailability.Taken(cleanTag)
+      }
+      Result.success(status)
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      handleFirestoreError(e, OperationType.GET, path)
+      Result.failure(e)
+    }
+  }
+
+  suspend fun claimUsername(
+    userId: String,
+    rawUsername: String,
+    newDisplayName: String? = null,
+  ): Result<String> {
+    val validation = UsernameValidator.validate(rawUsername)
+    if (validation is UsernameValidationResult.Invalid) {
+      return Result.failure(IllegalArgumentException(validation.message))
+    }
+    val newTag = (validation as UsernameValidationResult.Valid).normalized
+    val path = "payTags/$newTag"
+    return try {
+      val uid = requireUserId()
+      check(uid == userId)
+
+      val userRef = db.collection("users").document(uid)
+      val newTagRef = db.collection("payTags").document(newTag)
+
+      db.runTransaction { tx ->
+        val userSnap = tx.get(userRef)
+        if (!userSnap.exists()) {
+          throw IllegalStateException("Wallet profile is still initializing. Retry in a moment.")
+        }
+        val oldTag = userSnap.getString("payTag").orEmpty().trim().lowercase()
+        val existingName = userSnap.getString("displayName").orEmpty().ifBlank { "VaultFX Trader" }
+        val cleanDisplayName = (newDisplayName?.trim()?.takeIf { it.isNotEmpty() } ?: existingName).take(80)
+
+        val newTagSnap = tx.get(newTagRef)
+        val oldTagRef = if (oldTag.isNotBlank() && oldTag != newTag && oldTag.matches(Regex("^[a-z0-9_]{3,32}$"))) {
+          db.collection("payTags").document(oldTag)
+        } else {
+          null
+        }
+        val oldTagSnap = oldTagRef?.let { tx.get(it) }
+
+        if (newTagSnap.exists() && newTagSnap.getString("ownerUid") != uid) {
+          throw IllegalArgumentException("@$newTag is already claimed. Choose another username.")
+        }
+
+        if (oldTagRef != null && oldTagSnap != null && oldTagSnap.exists() && oldTagSnap.getString("ownerUid") == uid) {
+          tx.delete(oldTagRef)
+        }
+
+        if (!newTagSnap.exists()) {
+          tx.set(
+            newTagRef,
+            mapOf(
+              "ownerUid" to uid,
+              "payTag" to newTag,
+              "displayName" to cleanDisplayName,
+              "createdAt" to FieldValue.serverTimestamp(),
+              "updatedAt" to FieldValue.serverTimestamp(),
+            ),
+          )
+        } else {
+          tx.update(
+            newTagRef,
+            mapOf(
+              "displayName" to cleanDisplayName,
+              "updatedAt" to FieldValue.serverTimestamp(),
+            ),
+          )
+        }
+
+        tx.update(
+          userRef,
+          mapOf(
+            "payTag" to newTag,
+            "displayName" to cleanDisplayName,
+            "updatedAt" to FieldValue.serverTimestamp(),
+          ),
+        )
+      }.await()
+
+      Result.success(newTag)
     } catch (e: CancellationException) {
       throw e
     } catch (e: Exception) {

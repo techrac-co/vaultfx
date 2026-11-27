@@ -2,42 +2,44 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Cyber-Luxury Obsidian Vault Dark Palette
-val ObsidianBg = Color(0xFF06080E)
-val ObsidianSurface = Color(0xFF0E131D)
-val ObsidianSurfaceElevated = Color(0xFF151D2B)
-val ObsidianSurfaceHigh = Color(0xFF1E293B)
-val ObsidianBorder = Color(0xFF2B3A52)
+// Bybit Exchange x Apple iOS 27 Liquid Glass Dark Palette
+val BybitObsidianBg = Color(0xFF0B0E11)
+val BybitGlassSurface = Color(0xFF14181F)
+val BybitGlassSurfaceElevated = Color(0xFF1C222C)
+val BybitGlassSurfaceHigh = Color(0xFF252D3A)
+val BybitHairlineBorder = Color(0xFF2D3748)
 
-val ElectricMint = Color(0xFF2EFFA8)
-val OnElectricMint = Color(0xFF032315)
-val MintContainerDark = Color(0xFF0A3424)
+val BybitAmberGold = Color(0xFFF7A600)
+val OnBybitAmber = Color(0xFF1A1100)
+val BybitAmberContainerDark = Color(0xFF382704)
 
-val ChampagneGold = Color(0xFFFFCA4B)
-val OnChampagneGold = Color(0xFF2B1D00)
-val GoldContainerDark = Color(0xFF3A2B08)
+val BybitEmeraldGreen = Color(0xFF00C087)
+val OnBybitEmerald = Color(0xFF02261B)
+val BybitEmeraldContainerDark = Color(0xFF082E23)
 
-val SkyCyan = Color(0xFF22D3EE)
-val NeonViolet = Color(0xFF8B5CF6)
-val CoralRose = Color(0xFFFF4D6D)
-val CoralContainerDark = Color(0xFF3D121D)
+val BybitRubyRed = Color(0xFFF6465D)
+val BybitRubyContainerDark = Color(0xFF3D121A)
 
-val TextPrimaryDark = Color(0xFFF8FAFC)
-val TextSecondaryDark = Color(0xFF94A3B8)
+val LiquidIceCyan = Color(0xFF38BDF8)
+val LiquidPrismViolet = Color(0xFFA78BFA)
 
-// Crisp Alabaster Light Palette
-val AlabasterBg = Color(0xFFF3F6FB)
-val AlabasterSurface = Color(0xFFFFFFFF)
-val AlabasterSurfaceElevated = Color(0xFFEAF0F7)
-val AlabasterBorder = Color(0xFFD0DCEB)
+val TextPrimaryDark = Color(0xFFF5F7FA)
+val TextSecondaryDark = Color(0xFF8E9BAE)
 
-val EmeraldPrimaryLight = Color(0xFF008758)
-val MintContainerLight = Color(0xFFCFF9E6)
-val GoldAccentLight = Color(0xFFB47800)
-val GoldContainerLight = Color(0xFFFFEFC2)
-val VioletLight = Color(0xFF6D28D9)
-val CoralLight = Color(0xFFD92648)
-val CoralContainerLight = Color(0xFFFFE2E8)
+// Apple iOS 27 Liquid Frost Light Palette
+val AppleFrostBg = Color(0xFFF1F4F9)
+val AppleFrostSurface = Color(0xFFFFFFFF)
+val AppleFrostSurfaceElevated = Color(0xFFE9EFF7)
+val AppleFrostBorder = Color(0xFFD3DDE9)
 
-val TextPrimaryLight = Color(0xFF0B1220)
-val TextSecondaryLight = Color(0xFF475569)
+val BybitAmberLight = Color(0xFFD48400)
+val BybitAmberContainerLight = Color(0xFFFFF2D6)
+val BybitEmeraldLight = Color(0xFF00996B)
+val BybitEmeraldContainerLight = Color(0xFFD3F8EA)
+val BybitRubyLight = Color(0xFFD92648)
+val BybitRubyContainerLight = Color(0xFFFFE4E8)
+val LiquidCyanLight = Color(0xFF0284C7)
+val LiquidVioletLight = Color(0xFF6D28D9)
+
+val TextPrimaryLight = Color(0xFF0E131B)
+val TextSecondaryLight = Color(0xFF526074)

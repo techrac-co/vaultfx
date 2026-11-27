@@ -9,6 +9,8 @@ import com.example.ui.screens.matchesPairQuery
 import com.example.util.ExpressionEvaluator
 import com.example.util.NumberFormatter
 import com.example.util.QrCodeGenerator
+import com.example.util.UsernameValidationResult
+import com.example.util.UsernameValidator
 import com.example.util.WalletAddressHelper
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -202,5 +204,26 @@ class VaultLogicTest {
     assertTrue(PinCredentialHelper.verifyPin("482910", hash2))
     assertFalse(PinCredentialHelper.verifyPin("482911", hash1))
     assertFalse(PinCredentialHelper.verifyPin("000000", "malformed:record"))
+  }
+
+  @Test
+  fun usernameValidator_normalizesValidatesAndDetectsPlaceholders() {
+    assertEquals("my_user99", UsernameValidator.normalize("  @My_User99 "))
+
+    val valid = UsernameValidator.validate("@satoshi_fx")
+    assertTrue(valid is UsernameValidationResult.Valid)
+    assertEquals("satoshi_fx", (valid as UsernameValidationResult.Valid).normalized)
+
+    assertTrue(UsernameValidator.validate("ab") is UsernameValidationResult.Invalid)
+    assertTrue(UsernameValidator.validate("a".repeat(33)) is UsernameValidationResult.Invalid)
+    assertTrue(UsernameValidator.validate("bad-user!") is UsernameValidationResult.Invalid)
+    assertTrue(UsernameValidator.validate("bybit") is UsernameValidationResult.Invalid)
+    assertTrue(UsernameValidator.validate("vaultfx") is UsernameValidationResult.Invalid)
+    assertTrue(UsernameValidator.validate("admin") is UsernameValidationResult.Invalid)
+
+    assertTrue(UsernameValidator.isGeneratedPlaceholder(null))
+    assertTrue(UsernameValidator.isGeneratedPlaceholder(""))
+    assertTrue(UsernameValidator.isGeneratedPlaceholder("trader_abcd1234"))
+    assertFalse(UsernameValidator.isGeneratedPlaceholder("satoshi_fx"))
   }
 }

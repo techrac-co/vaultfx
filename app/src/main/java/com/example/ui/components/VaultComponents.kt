@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -24,20 +25,26 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AlternateEmail
 import androidx.compose.material.icons.rounded.Brightness4
 import androidx.compose.material.icons.rounded.Brightness7
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Person
@@ -72,6 +79,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -84,9 +92,11 @@ import com.example.R
 import com.example.model.AssetCatalog
 import com.example.model.AssetCategory
 import com.example.model.CurrencyAsset
+import com.example.ui.MainTab
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.LocalVaultColors
 import com.example.util.NumberFormatter
+import com.example.util.UsernameValidator
 
 @Composable
 fun AnimatedAuroraBackground(
@@ -94,21 +104,21 @@ fun AnimatedAuroraBackground(
   content: @Composable BoxScope.() -> Unit,
 ) {
   val vaultColors = LocalVaultColors.current
-  val transition = rememberInfiniteTransition(label = "aurora_bg")
+  val transition = rememberInfiniteTransition(label = "liquid_glass_bg")
   val drift by transition.animateFloat(
     initialValue = 0f,
     targetValue = 1f,
     animationSpec = infiniteRepeatable(
-      animation = tween(durationMillis = 9000, easing = FastOutSlowInEasing),
+      animation = tween(durationMillis = 10000, easing = FastOutSlowInEasing),
       repeatMode = RepeatMode.Reverse,
     ),
     label = "aurora_drift",
   )
 
   val bgColor = MaterialTheme.colorScheme.background
-  val mintAlpha = if (vaultColors.isDark) 0.13f else 0.08f
-  val cyanAlpha = if (vaultColors.isDark) 0.10f else 0.06f
-  val violetAlpha = if (vaultColors.isDark) 0.11f else 0.05f
+  val goldAlpha = if (vaultColors.isDark) 0.11f else 0.08f
+  val cyanAlpha = if (vaultColors.isDark) 0.10f else 0.08f
+  val mintAlpha = if (vaultColors.isDark) 0.08f else 0.06f
 
   Box(
     modifier = modifier
@@ -120,36 +130,36 @@ fun AnimatedAuroraBackground(
       val h = size.height
       if (w <= 0f || h <= 0f) return@Canvas
 
-      val mintCenter = Offset(w * (0.18f + 0.14f * drift), h * (0.12f + 0.08f * drift))
+      val goldCenter = Offset(w * (0.20f + 0.12f * drift), h * (0.10f + 0.07f * drift))
       drawCircle(
         brush = Brush.radialGradient(
-          colors = listOf(vaultColors.positive.copy(alpha = mintAlpha), Color.Transparent),
-          center = mintCenter,
+          colors = listOf(vaultColors.gold.copy(alpha = goldAlpha), Color.Transparent),
+          center = goldCenter,
           radius = w * 0.72f,
         ),
-        center = mintCenter,
+        center = goldCenter,
         radius = w * 0.72f,
       )
 
-      val violetCenter = Offset(w * (0.85f - 0.15f * drift), h * (0.28f + 0.12f * drift))
-      drawCircle(
-        brush = Brush.radialGradient(
-          colors = listOf(vaultColors.violet.copy(alpha = violetAlpha), Color.Transparent),
-          center = violetCenter,
-          radius = w * 0.65f,
-        ),
-        center = violetCenter,
-        radius = w * 0.65f,
-      )
-
-      val cyanCenter = Offset(w * (0.5f + 0.18f * (1f - drift)), h * 0.86f)
+      val cyanCenter = Offset(w * (0.86f - 0.14f * drift), h * (0.30f + 0.10f * drift))
       drawCircle(
         brush = Brush.radialGradient(
           colors = listOf(vaultColors.cyan.copy(alpha = cyanAlpha), Color.Transparent),
           center = cyanCenter,
-          radius = w * 0.70f,
+          radius = w * 0.68f,
         ),
         center = cyanCenter,
+        radius = w * 0.68f,
+      )
+
+      val mintCenter = Offset(w * (0.48f + 0.16f * (1f - drift)), h * 0.88f)
+      drawCircle(
+        brush = Brush.radialGradient(
+          colors = listOf(vaultColors.positive.copy(alpha = mintAlpha), Color.Transparent),
+          center = mintCenter,
+          radius = w * 0.70f,
+        ),
+        center = mintCenter,
         radius = w * 0.70f,
       )
     }
@@ -159,19 +169,71 @@ fun AnimatedAuroraBackground(
 }
 
 @Composable
-fun GradientBorderSurface(
+fun LiquidGlassCard(
   modifier: Modifier = Modifier,
-  shape: Shape = RoundedCornerShape(24.dp),
-  containerColor: Color = MaterialTheme.colorScheme.surface,
-  borderColors: List<Color>? = null,
-  borderWidth: Dp = 1.3.dp,
+  shape: Shape = RoundedCornerShape(26.dp),
+  containerColor: Color = LocalVaultColors.current.glassSurface,
+  accentTint: Color? = null,
+  borderWidth: Dp = 1.15.dp,
   content: @Composable BoxScope.() -> Unit,
 ) {
   val vaultColors = LocalVaultColors.current
-  val colors = borderColors ?: listOf(
-    vaultColors.positive.copy(alpha = 0.72f),
-    vaultColors.cyan.copy(alpha = 0.55f),
-    vaultColors.violet.copy(alpha = 0.62f),
+  val rimColors = if (accentTint != null) {
+    listOf(
+      vaultColors.glassHighlight,
+      accentTint.copy(alpha = if (vaultColors.isDark) 0.52f else 0.45f),
+      vaultColors.glassBorder,
+    )
+  } else {
+    listOf(
+      vaultColors.glassHighlight,
+      vaultColors.cyan.copy(alpha = if (vaultColors.isDark) 0.22f else 0.18f),
+      vaultColors.glassBorder,
+    )
+  }
+
+  Surface(
+    modifier = modifier,
+    color = containerColor,
+    shape = shape,
+    border = BorderStroke(
+      width = borderWidth,
+      brush = Brush.linearGradient(colors = rimColors),
+    ),
+    shadowElevation = if (vaultColors.isDark) 10.dp else 4.dp,
+  ) {
+    Box(
+      modifier = Modifier.background(
+        Brush.verticalGradient(
+          colors = listOf(
+            Color.White.copy(alpha = if (vaultColors.isDark) 0.055f else 0.35f),
+            Color.Transparent,
+            Color.Black.copy(alpha = if (vaultColors.isDark) 0.12f else 0.02f),
+          )
+        )
+      ),
+      content = content,
+    )
+  }
+}
+
+@Composable
+fun GradientBorderSurface(
+  modifier: Modifier = Modifier,
+  shape: Shape = RoundedCornerShape(26.dp),
+  containerColor: Color = LocalVaultColors.current.glassSurface,
+  borderColors: List<Color>? = null,
+  borderWidth: Dp = 1.25.dp,
+  content: @Composable BoxScope.() -> Unit,
+) {
+  val vaultColors = LocalVaultColors.current
+  val colors = borderColors?.let {
+    listOf(vaultColors.glassHighlight) + it
+  } ?: listOf(
+    vaultColors.glassHighlight,
+    vaultColors.gold.copy(alpha = 0.55f),
+    vaultColors.cyan.copy(alpha = 0.45f),
+    vaultColors.glassBorder,
   )
 
   Surface(
@@ -182,9 +244,19 @@ fun GradientBorderSurface(
       width = borderWidth,
       brush = Brush.linearGradient(colors = colors),
     ),
-    shadowElevation = if (vaultColors.isDark) 8.dp else 2.dp,
+    shadowElevation = if (vaultColors.isDark) 10.dp else 3.dp,
   ) {
-    Box(content = content)
+    Box(
+      modifier = Modifier.background(
+        Brush.verticalGradient(
+          colors = listOf(
+            Color.White.copy(alpha = if (vaultColors.isDark) 0.05f else 0.32f),
+            Color.Transparent,
+          )
+        )
+      ),
+      content = content,
+    )
   }
 }
 
@@ -192,8 +264,8 @@ fun GradientBorderSurface(
 fun BouncySurface(
   onClick: () -> Unit,
   modifier: Modifier = Modifier,
-  shape: Shape = RoundedCornerShape(16.dp),
-  color: Color = MaterialTheme.colorScheme.surface,
+  shape: Shape = RoundedCornerShape(18.dp),
+  color: Color = LocalVaultColors.current.glassSurface,
   border: BorderStroke? = null,
   shadowElevation: Dp = 0.dp,
   enabled: Boolean = true,
@@ -245,6 +317,7 @@ fun VaultTopBar(
   onRefreshClick: () -> Unit,
   onToggleTheme: () -> Unit,
   onProfileClick: () -> Unit,
+  onCreateUsernameClick: () -> Unit = onProfileClick,
 ) {
   val vaultColors = LocalVaultColors.current
   val pulseTransition = rememberInfiniteTransition(label = "live_pulse")
@@ -254,11 +327,12 @@ fun VaultTopBar(
     animationSpec = infiniteRepeatable(tween(850), RepeatMode.Reverse),
     label = "pulse_alpha",
   )
+  val isPlaceholder = remember(payTag) { UsernameValidator.isGeneratedPlaceholder(payTag) }
 
   Row(
     modifier = Modifier
       .fillMaxWidth()
-      .padding(horizontal = 14.dp, vertical = 10.dp),
+      .padding(horizontal = 14.dp, vertical = 8.dp),
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.SpaceBetween,
   ) {
@@ -271,13 +345,13 @@ fun VaultTopBar(
       Box(
         modifier = Modifier
           .size(38.dp)
-          .clip(RoundedCornerShape(12.dp))
+          .clip(RoundedCornerShape(13.dp))
           .border(
-            width = 1.4.dp,
+            width = 1.3.dp,
             brush = Brush.linearGradient(
-              listOf(vaultColors.positive, vaultColors.cyan, vaultColors.violet)
+              listOf(vaultColors.glassHighlight, vaultColors.gold, vaultColors.cyan)
             ),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(13.dp),
           ),
       ) {
         Image(
@@ -288,40 +362,70 @@ fun VaultTopBar(
         )
       }
       Spacer(Modifier.width(10.dp))
-      Column {
+      Column(modifier = Modifier.weight(1f)) {
         Text(
           text = title,
-          style = MaterialTheme.typography.titleLarge,
+          style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
           color = MaterialTheme.colorScheme.onBackground,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
         )
-        if (!payTag.isNullOrBlank()) {
-          Text(
-            text = "@$payTag",
-            style = MaterialTheme.typography.labelSmall,
-            color = vaultColors.gold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
+        Spacer(Modifier.height(2.dp))
+        BouncySurface(
+          onClick = onCreateUsernameClick,
+          color = if (isPlaceholder) vaultColors.goldContainer.copy(alpha = 0.9f) else vaultColors.glassSurface,
+          shape = RoundedCornerShape(50),
+          border = BorderStroke(
+            0.9.dp,
+            if (isPlaceholder) vaultColors.gold.copy(alpha = 0.65f) else vaultColors.glassHighlight,
+          ),
+          modifier = Modifier.testTag("top_bar_username_pill"),
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Icon(
+              imageVector = if (isPlaceholder) Icons.Rounded.AlternateEmail else Icons.Rounded.Edit,
+              contentDescription = "Create or edit username",
+              tint = vaultColors.gold,
+              modifier = Modifier.size(11.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+              text = when {
+                payTag.isNullOrBlank() -> "Create Username"
+                isPlaceholder -> "Set @username"
+                else -> "@$payTag"
+              },
+              style = MaterialTheme.typography.labelSmall.copy(
+                fontFamily = JetBrainsMonoFontFamily,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+              ),
+              color = vaultColors.gold,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+            )
+          }
         }
       }
     }
 
     Row(
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(4.dp),
+      horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
       BouncySurface(
         onClick = onRefreshClick,
         modifier = Modifier
           .minimumInteractiveComponentSize()
           .testTag("refresh_rates_pill"),
-        color = if (isLive) vaultColors.positiveContainer else MaterialTheme.colorScheme.surfaceVariant,
+        color = if (isLive) vaultColors.positiveContainer.copy(alpha = 0.85f) else vaultColors.glassSurface,
         shape = RoundedCornerShape(50),
         border = BorderStroke(
           1.dp,
-          if (isLive) vaultColors.positive.copy(alpha = 0.5f) else vaultColors.cardBorder,
+          if (isLive) vaultColors.positive.copy(alpha = 0.55f) else vaultColors.glassBorder,
         ),
       ) {
         Row(
@@ -337,9 +441,9 @@ fun VaultTopBar(
                 else vaultColors.gold
               ),
           )
-          Spacer(Modifier.width(6.dp))
+          Spacer(Modifier.width(5.dp))
           Text(
-            text = if (isRefreshing) "SYNC" else if (isLive) "LIVE" else "RATE",
+            text = if (isRefreshing) "SYNC" else if (isLive) "LIVE" else "FX",
             style = MaterialTheme.typography.labelSmall,
             color = if (isLive) vaultColors.positive else MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -348,55 +452,213 @@ fun VaultTopBar(
             imageVector = Icons.Rounded.Refresh,
             contentDescription = "Refresh live market rates",
             tint = if (isLive) vaultColors.positive else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(14.dp),
+            modifier = Modifier.size(13.dp),
           )
         }
       }
 
-      IconButton(
+      BouncySurface(
         onClick = onToggleTheme,
-        modifier = Modifier.testTag("theme_toggle_button"),
+        shape = CircleShape,
+        color = vaultColors.glassSurface,
+        border = BorderStroke(1.dp, vaultColors.glassBorder),
+        modifier = Modifier
+          .size(38.dp)
+          .minimumInteractiveComponentSize()
+          .testTag("theme_toggle_button"),
       ) {
-        Icon(
-          imageVector = if (isDarkTheme) Icons.Rounded.Brightness7 else Icons.Rounded.Brightness4,
-          contentDescription = "Toggle light or dark theme",
-          tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+          Icon(
+            imageVector = if (isDarkTheme) Icons.Rounded.Brightness7 else Icons.Rounded.Brightness4,
+            contentDescription = "Toggle light or dark theme",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+          )
+        }
       }
 
       if (showLockButton) {
-        IconButton(
+        BouncySurface(
           onClick = onLockClick,
-          modifier = Modifier.testTag("top_bar_lock_button"),
+          shape = CircleShape,
+          color = vaultColors.glassSurface,
+          border = BorderStroke(1.dp, vaultColors.positive.copy(alpha = 0.45f)),
+          modifier = Modifier
+            .size(38.dp)
+            .minimumInteractiveComponentSize()
+            .testTag("top_bar_lock_button"),
         ) {
-          Icon(
-            imageVector = Icons.Rounded.Lock,
-            contentDescription = "Lock VaultFX now",
-            tint = vaultColors.positive,
-          )
+          Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Icon(
+              imageVector = Icons.Rounded.Lock,
+              contentDescription = "Lock VaultFX now",
+              tint = vaultColors.positive,
+              modifier = Modifier.size(17.dp),
+            )
+          }
         }
       }
 
       BouncySurface(
         onClick = onProfileClick,
         modifier = Modifier
-          .size(40.dp)
+          .size(38.dp)
           .minimumInteractiveComponentSize()
           .testTag("profile_button"),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = vaultColors.glassElevated,
         border = BorderStroke(
           1.2.dp,
-          Brush.linearGradient(listOf(vaultColors.positive.copy(alpha = 0.65f), vaultColors.cyan.copy(alpha = 0.65f))),
+          Brush.linearGradient(listOf(vaultColors.glassHighlight, vaultColors.gold.copy(alpha = 0.7f))),
         ),
       ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
           Icon(
             imageVector = Icons.Rounded.Person,
-            contentDescription = "Open wallet profile and sign out",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp),
+            contentDescription = "Open account, username and security settings",
+            tint = vaultColors.gold,
+            modifier = Modifier.size(19.dp),
           )
+        }
+      }
+    }
+  }
+}
+
+@Composable
+fun FloatingLiquidGlassNavBar(
+  items: List<Triple<MainTab, ImageVector, ImageVector>>,
+  currentTab: MainTab,
+  badgeFor: (MainTab) -> Int,
+  onSelectTab: (MainTab) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val vaultColors = LocalVaultColors.current
+  Box(
+    modifier = modifier
+      .fillMaxWidth()
+      .windowInsetsPadding(WindowInsets.navigationBars)
+      .padding(horizontal = 10.dp, vertical = 6.dp),
+    contentAlignment = Alignment.Center,
+  ) {
+    Surface(
+      shape = RoundedCornerShape(32.dp),
+      color = vaultColors.glassElevated,
+      border = BorderStroke(
+        width = 1.2.dp,
+        brush = Brush.verticalGradient(
+          colors = listOf(
+            vaultColors.glassHighlight,
+            vaultColors.glassBorder,
+          )
+        ),
+      ),
+      shadowElevation = if (vaultColors.isDark) 16.dp else 10.dp,
+      modifier = Modifier.fillMaxWidth(),
+    ) {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .background(
+            Brush.verticalGradient(
+              colors = listOf(
+                Color.White.copy(alpha = if (vaultColors.isDark) 0.08f else 0.55f),
+                Color.Transparent,
+              )
+            )
+          )
+          .padding(horizontal = 5.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        items.forEach { (tab, filledIcon, outlinedIcon) ->
+          val selected = currentTab == tab
+          val badgeCount = badgeFor(tab)
+          val pillBg by animateColorAsState(
+            targetValue = if (selected) {
+              vaultColors.gold.copy(alpha = if (vaultColors.isDark) 0.22f else 0.20f)
+            } else {
+              Color.Transparent
+            },
+            label = "nav_pill_bg_${tab.name}",
+          )
+          val contentTint by animateColorAsState(
+            targetValue = if (selected) vaultColors.gold else MaterialTheme.colorScheme.onSurfaceVariant,
+            label = "nav_tint_${tab.name}",
+          )
+
+          Box(
+            modifier = Modifier
+              .weight(1f)
+              .minimumInteractiveComponentSize()
+              .clip(RoundedCornerShape(26.dp))
+              .background(pillBg)
+              .then(
+                if (selected) {
+                  Modifier.border(
+                    width = 0.9.dp,
+                    brush = Brush.verticalGradient(
+                      colors = listOf(
+                        vaultColors.glassHighlight,
+                        vaultColors.gold.copy(alpha = 0.45f),
+                      )
+                    ),
+                    shape = RoundedCornerShape(26.dp),
+                  )
+                } else {
+                  Modifier
+                }
+              )
+              .clickable { onSelectTab(tab) }
+              .padding(vertical = 7.dp, horizontal = 2.dp)
+              .testTag("nav_tab_${tab.name.lowercase()}"),
+            contentAlignment = Alignment.Center,
+          ) {
+            Column(
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.Center,
+            ) {
+              Box(contentAlignment = Alignment.TopEnd) {
+                Icon(
+                  imageVector = if (selected) filledIcon else outlinedIcon,
+                  contentDescription = tab.label,
+                  tint = contentTint,
+                  modifier = Modifier.size(20.dp),
+                )
+                if (badgeCount > 0) {
+                  Surface(
+                    color = vaultColors.negative,
+                    shape = CircleShape,
+                    modifier = Modifier
+                      .offset(x = 6.dp, y = (-4).dp)
+                      .size(15.dp),
+                  ) {
+                    Box(contentAlignment = Alignment.Center) {
+                      Text(
+                        text = if (badgeCount > 9) "9+" else badgeCount.toString(),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                          fontSize = 8.sp,
+                          fontWeight = FontWeight.Bold,
+                        ),
+                        color = Color.White,
+                      )
+                    }
+                  }
+                }
+              }
+              Spacer(Modifier.height(2.dp))
+              Text(
+                text = tab.label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                  fontSize = 10.sp,
+                  fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                ),
+                color = contentTint,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+          }
         }
       }
     }
@@ -415,10 +677,10 @@ fun AssetBadge(
       .clip(CircleShape)
       .background(
         Brush.radialGradient(
-          colors = listOf(accent.copy(alpha = 0.28f), accent.copy(alpha = 0.10f))
+          colors = listOf(accent.copy(alpha = 0.30f), accent.copy(alpha = 0.12f))
         )
       )
-      .border(1.1.dp, accent.copy(alpha = 0.65f), CircleShape),
+      .border(1.1.dp, accent.copy(alpha = 0.72f), CircleShape),
     contentAlignment = Alignment.Center,
   ) {
     Text(
@@ -443,9 +705,12 @@ fun CurrencySelectorPill(
   BouncySurface(
     onClick = onClick,
     modifier = modifier.minimumInteractiveComponentSize(),
-    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    shape = RoundedCornerShape(14.dp),
-    border = BorderStroke(1.dp, vaultColors.cardBorder),
+    color = vaultColors.glassElevated,
+    shape = RoundedCornerShape(50),
+    border = BorderStroke(
+      1.dp,
+      Brush.linearGradient(listOf(vaultColors.glassHighlight, vaultColors.glassBorder)),
+    ),
   ) {
     Row(
       modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
@@ -521,7 +786,7 @@ fun MarketSparkline(
     drawPath(
       path = fillPath,
       brush = Brush.verticalGradient(
-        colors = listOf(strokeColor.copy(alpha = 0.30f), Color.Transparent),
+        colors = listOf(strokeColor.copy(alpha = 0.28f), Color.Transparent),
       ),
     )
     drawPath(
@@ -555,7 +820,7 @@ fun ChangeBadge(changePct: Double) {
   Surface(
     color = bg,
     shape = RoundedCornerShape(8.dp),
-    border = BorderStroke(0.75.dp, fg.copy(alpha = 0.3f)),
+    border = BorderStroke(0.75.dp, fg.copy(alpha = 0.35f)),
   ) {
     Text(
       text = "$prefix${"%.2f".format(java.util.Locale.US, changePct)}%",
@@ -620,7 +885,7 @@ fun AssetPickerSheet(
         placeholder = { Text("Search BTC, USD, Naira, GBP / GDP...") },
         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
         singleLine = true,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier
           .fillMaxWidth()
           .testTag("asset_picker_search"),
@@ -658,7 +923,7 @@ fun AssetPickerSheet(
           Surface(
             modifier = Modifier
               .fillMaxWidth()
-              .clip(RoundedCornerShape(16.dp))
+              .clip(RoundedCornerShape(18.dp))
               .clickable {
                 onSelect(asset)
                 onDismiss()
@@ -666,7 +931,7 @@ fun AssetPickerSheet(
               .testTag("pick_asset_${asset.code}"),
             color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(18.dp),
             border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
           ) {
             Row(
@@ -708,7 +973,7 @@ fun QrCodeCanvas(
 ) {
   Canvas(
     modifier = modifier
-      .clip(RoundedCornerShape(16.dp))
+      .clip(RoundedCornerShape(18.dp))
       .background(Color.White)
       .padding(12.dp),
   ) {
@@ -721,7 +986,7 @@ fun QrCodeCanvas(
       for (x in 0 until n) {
         if (matrix[y][x]) {
           drawRect(
-            color = Color(0xFF06080E),
+            color = Color(0xFF0B0E11),
             topLeft = Offset(offsetX + x * cellSize, offsetY + y * cellSize),
             size = androidx.compose.ui.geometry.Size(cellSize + 0.5f, cellSize + 0.5f),
           )

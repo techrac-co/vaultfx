@@ -42,10 +42,9 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -63,7 +62,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import androidx.fragment.app.FragmentActivity
@@ -94,12 +92,14 @@ import com.example.ui.MainTab
 import com.example.ui.UiState
 import com.example.ui.VaultViewModel
 import com.example.ui.components.AnimatedAuroraBackground
+import com.example.ui.components.FloatingLiquidGlassNavBar
 import com.example.ui.components.VaultTopBar
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.BiometricRecommendTxDialog
 import com.example.ui.screens.CalcHistorySheet
 import com.example.ui.screens.CalculatorScreen
 import com.example.ui.screens.CreateEscrowSheet
+import com.example.ui.screens.CreateUsernameSheet
 import com.example.ui.screens.DepositFiatSheet
 import com.example.ui.screens.E2eeVoucherSheet
 import com.example.ui.screens.EscrowScreen
@@ -115,6 +115,7 @@ import com.example.ui.screens.TradeScreen
 import com.example.ui.screens.VaultLockScreen
 import com.example.ui.screens.WalletScreen
 import com.example.ui.screens.needsUserAction
+import com.example.ui.theme.LocalVaultColors
 import com.example.ui.theme.VaultFxTheme
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
@@ -444,6 +445,7 @@ fun VaultAppRoot(
   val marketSnapshot by viewModel.marketSnapshot.collectAsStateWithLifecycle()
   val isSendingCrypto by viewModel.isSendingCrypto.collectAsStateWithLifecycle()
   val isSubmittingEscrow by viewModel.isSubmittingEscrow.collectAsStateWithLifecycle()
+  val isUpdatingUsername by viewModel.isUpdatingUsername.collectAsStateWithLifecycle()
 
   val isDeviceOnline by viewModel.isDeviceOnline.collectAsStateWithLifecycle()
   val manualOfflineHold by viewModel.manualOfflineHold.collectAsStateWithLifecycle()
@@ -494,6 +496,7 @@ fun VaultAppRoot(
   var showDepositSheet by remember { mutableStateOf(false) }
   var showCalcHistorySheet by remember { mutableStateOf(false) }
   var showProfileSheet by remember { mutableStateOf(false) }
+  var showCreateUsernameSheet by remember { mutableStateOf(false) }
 
   LaunchedEffect(viewModel) {
     viewModel.events.collect { msg ->
@@ -552,6 +555,7 @@ fun VaultAppRoot(
         )
       } else {
         AnimatedAuroraBackground {
+          val vaultColors = LocalVaultColors.current
           BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val useNavRail = maxWidth >= 600.dp
 
@@ -562,48 +566,19 @@ fun VaultAppRoot(
               snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
               bottomBar = {
                 if (!useNavRail) {
-                  NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                    tonalElevation = 0.dp,
-                  ) {
-                    navItems.forEach { (tab, filledIcon, outlinedIcon) ->
-                      val selected = currentTab == tab
-                      val badgeCount = when (tab) {
+                  FloatingLiquidGlassNavBar(
+                    items = navItems,
+                    currentTab = currentTab,
+                    badgeFor = { tab ->
+                      when (tab) {
                         MainTab.ESCROW -> actionableEscrowCount
                         MainTab.OFFLINE -> pendingOfflineCount
                         MainTab.WALLET -> incomingTransfers.size
                         else -> 0
                       }
-                      NavigationBarItem(
-                        selected = selected,
-                        onClick = { viewModel.selectTab(tab) },
-                        icon = {
-                          if (badgeCount > 0) {
-                            BadgedBox(badge = { Badge { Text(badgeCount.toString()) } }) {
-                              Icon(
-                                imageVector = if (selected) filledIcon else outlinedIcon,
-                                contentDescription = tab.label,
-                              )
-                            }
-                          } else {
-                            Icon(
-                              imageVector = if (selected) filledIcon else outlinedIcon,
-                              contentDescription = tab.label,
-                            )
-                          }
-                        },
-                        label = {
-                          Text(
-                            text = tab.label,
-                            style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                          )
-                        },
-                        modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}"),
-                      )
-                    }
-                  }
+                    },
+                    onSelectTab = viewModel::selectTab,
+                  )
                 }
               },
             ) { innerPadding ->
@@ -614,7 +589,7 @@ fun VaultAppRoot(
               ) {
                 if (useNavRail) {
                   NavigationRail(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                    containerColor = vaultColors.glassElevated,
                     modifier = Modifier.fillMaxHeight(),
                   ) {
                     navItems.forEach { (tab, filledIcon, outlinedIcon) ->
@@ -628,6 +603,11 @@ fun VaultAppRoot(
                       NavigationRailItem(
                         selected = selected,
                         onClick = { viewModel.selectTab(tab) },
+                        colors = NavigationRailItemDefaults.colors(
+                          selectedIconColor = vaultColors.gold,
+                          selectedTextColor = vaultColors.gold,
+                          indicatorColor = vaultColors.goldContainer,
+                        ),
                         icon = {
                           if (badgeCount > 0) {
                             BadgedBox(badge = { Badge { Text(badgeCount.toString()) } }) {
@@ -654,11 +634,11 @@ fun VaultAppRoot(
                   VaultTopBar(
                     title = when (currentTab) {
                       MainTab.CALCULATOR -> "VaultFX"
-                      MainTab.PAIRS -> "Currency Pairs"
-                      MainTab.TRADE -> "Trade Desk"
-                      MainTab.ESCROW -> "Smart Escrow"
+                      MainTab.PAIRS -> "Markets"
+                      MainTab.TRADE -> "Spot Trade"
+                      MainTab.ESCROW -> "P2P Escrow"
                       MainTab.OFFLINE -> "Offline Vault"
-                      MainTab.WALLET -> "Crypto Wallet"
+                      MainTab.WALLET -> "Assets"
                     },
                     isLive = marketSnapshot.isLive && !isEffectivelyOffline,
                     isRefreshing = marketSnapshot.isRefreshing || isSyncingOffline,
@@ -683,6 +663,7 @@ fun VaultAppRoot(
                     },
                     onToggleTheme = { viewModel.toggleTheme() },
                     onProfileClick = { showProfileSheet = true },
+                    onCreateUsernameClick = { showCreateUsernameSheet = true },
                   )
 
                   Box(modifier = Modifier.weight(1f)) {
@@ -837,6 +818,7 @@ fun VaultAppRoot(
                           pendingOfflineDebits = pendingOfflineDebits,
                           isBiometricProtected = (securitySettings.appLockEnabled || securitySettings.txConfirmationEnabled) && canEnforceAuth,
                           onOpenSecuritySettings = { showProfileSheet = true },
+                          onOpenCreateUsername = { showCreateUsernameSheet = true },
                           onOpenSend = { asset ->
                             sendSheetAsset = asset ?: "BTC"
                             sendSheetAmount = null
@@ -1028,6 +1010,10 @@ fun VaultAppRoot(
                 userEmail = userEmail,
                 securitySettings = securitySettings,
                 hardwareStatus = hardwareStatus,
+                onOpenCreateUsername = {
+                  showProfileSheet = false
+                  showCreateUsernameSheet = true
+                },
                 onToggleAppLock = { enabled ->
                   if (enabled) {
                     securityStore.setAppLockEnabled(currentUserId, true)
@@ -1089,6 +1075,27 @@ fun VaultAppRoot(
                 },
                 onSignOut = onSignOut,
                 onDismiss = { showProfileSheet = false },
+              )
+            }
+
+            if (showCreateUsernameSheet) {
+              CreateUsernameSheet(
+                profile = profile,
+                isUpdating = isUpdatingUsername,
+                onCheckAvailability = viewModel::checkUsernameAvailability,
+                onSaveUsername = { newUsername, newDisplayName ->
+                  authorizeTransaction(
+                    title = "Authorize Username Update",
+                    subtitle = "Claim @$newUsername as your VaultFX @handle",
+                  ) {
+                    viewModel.claimUsername(
+                      rawUsername = newUsername,
+                      newDisplayName = newDisplayName,
+                      onSuccess = { showCreateUsernameSheet = false },
+                    )
+                  }
+                },
+                onDismiss = { showCreateUsernameSheet = false },
               )
             }
           }

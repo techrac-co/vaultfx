@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,7 +35,6 @@ import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -65,7 +63,7 @@ import com.example.ui.components.AssetBadge
 import com.example.ui.components.AssetPickerSheet
 import com.example.ui.components.BouncySurface
 import com.example.ui.components.CurrencySelectorPill
-import com.example.ui.components.GradientBorderSurface
+import com.example.ui.components.LiquidGlassCard
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.LocalVaultColors
 import com.example.util.NumberFormatter
@@ -102,6 +100,11 @@ fun CalculatorScreen(
     marketSnapshot.rate(calcState.baseCode, calcState.targetCode)
   }
 
+  // Live Bybit Ticker Ribbon pairs
+  val tickerPairs = remember {
+    listOf("BTC" to "USD", "ETH" to "USD", "USD" to "NGN", "USD" to "GBP")
+  }
+
   // Simultaneous multi-currency strip excluding base & target
   val multiConvertAssets = remember(calcState.baseCode, calcState.targetCode) {
     listOf("USD", "NGN", "GBP", "EUR", "BTC", "ETH", "SOL", "USDT")
@@ -114,35 +117,69 @@ fun CalculatorScreen(
     modifier = Modifier
       .fillMaxSize()
       .verticalScroll(rememberScrollState())
-      .padding(horizontal = 16.dp, vertical = 4.dp),
+      .padding(horizontal = 14.dp, vertical = 4.dp),
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
     Column(
       modifier = Modifier
         .fillMaxWidth()
-        .widthIn(max = 580.dp),
+        .widthIn(max = 600.dp),
     ) {
-      // Glowing Dual Display Deck
+      // Compact Bybit Live Market Ticker Pills
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .horizontalScroll(rememberScrollState())
+          .padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+      ) {
+        tickerPairs.forEach { (b, q) ->
+          val rate = marketSnapshot.rate(b, q)
+          val chg = marketSnapshot.pairChange24h(b, q)
+          val quoteSym = AssetCatalog.find(q).symbol
+          BouncySurface(
+            onClick = { onSelectCurrencies(b, q) },
+            color = vaultColors.glassSurface,
+            shape = RoundedCornerShape(50),
+            border = BorderStroke(0.9.dp, vaultColors.glassBorder),
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Text(
+                text = "$b/$q",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+              )
+              Spacer(Modifier.width(5.dp))
+              Text(
+                text = "$quoteSym${NumberFormatter.formatRate(rate)}",
+                style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                color = vaultColors.gold,
+              )
+              Spacer(Modifier.width(4.dp))
+              Text(
+                text = "${if (chg >= 0) "+" else ""}${"%.1f".format(java.util.Locale.US, chg)}%",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = if (chg >= 0) vaultColors.positive else vaultColors.negative,
+              )
+            }
+          }
+        }
+      }
+
+      // Apple iOS 27 Liquid Glass Dual Display Deck
       Box(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          // Base Input & Math Expression Card
-          GradientBorderSurface(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-            shape = RoundedCornerShape(24.dp),
-            borderColors = listOf(vaultColors.positive.copy(alpha = 0.65f), vaultColors.cyan.copy(alpha = 0.45f)),
+          LiquidGlassCard(
+            accentTint = vaultColors.gold,
+            shape = RoundedCornerShape(26.dp),
             modifier = Modifier.fillMaxWidth(),
           ) {
             Column(
               modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                  Brush.radialGradient(
-                    colors = listOf(
-                      MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                      Color.Transparent,
-                    )
-                  )
-                )
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             ) {
               Row(
@@ -209,25 +246,15 @@ fun CalculatorScreen(
             }
           }
 
-          // Target Simultaneous Conversion Card
-          GradientBorderSurface(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-            shape = RoundedCornerShape(24.dp),
-            borderColors = listOf(vaultColors.cyan.copy(alpha = 0.70f), vaultColors.violet.copy(alpha = 0.65f)),
+          LiquidGlassCard(
+            accentTint = vaultColors.cyan,
+            containerColor = vaultColors.glassElevated,
+            shape = RoundedCornerShape(26.dp),
             modifier = Modifier.fillMaxWidth(),
           ) {
             Column(
               modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                  Brush.linearGradient(
-                    colors = listOf(
-                      vaultColors.cyan.copy(alpha = 0.10f),
-                      vaultColors.violet.copy(alpha = 0.08f),
-                      Color.Transparent,
-                    )
-                  )
-                )
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             ) {
               Row(
@@ -243,7 +270,7 @@ fun CalculatorScreen(
                 Text(
                   text = "1 ${baseAsset.code} = ${NumberFormatter.formatRate(unitRate)} ${targetAsset.code}",
                   style = MaterialTheme.typography.labelSmall,
-                  color = MaterialTheme.colorScheme.primary,
+                  color = vaultColors.gold,
                 )
               }
 
@@ -275,7 +302,7 @@ fun CalculatorScreen(
                       fontSize = 28.sp,
                       fontWeight = FontWeight.Bold,
                     ),
-                    color = MaterialTheme.colorScheme.primary,
+                    color = vaultColors.positive,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.testTag("calc_target_result"),
@@ -286,7 +313,7 @@ fun CalculatorScreen(
           }
         }
 
-        // Overlapping Rotating Swap Button
+        // Overlapping Liquid Glass Swap Orb
         BouncySurface(
           onClick = {
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -299,15 +326,15 @@ fun CalculatorScreen(
             .minimumInteractiveComponentSize()
             .testTag("calc_swap_button"),
           shape = CircleShape,
-          color = MaterialTheme.colorScheme.primary,
+          color = vaultColors.gold,
           border = BorderStroke(2.dp, MaterialTheme.colorScheme.background),
-          shadowElevation = 8.dp,
+          shadowElevation = 10.dp,
         ) {
           Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(
               imageVector = Icons.Rounded.SwapVert,
               contentDescription = "Swap base and target currencies",
-              tint = MaterialTheme.colorScheme.onPrimary,
+              tint = Color(0xFF1A1100),
               modifier = Modifier
                 .size(22.dp)
                 .graphicsLayer { rotationZ = swapRotation },
@@ -330,9 +357,9 @@ fun CalculatorScreen(
           BouncySurface(
             onClick = { onSelectCurrencies(calcState.baseCode, asset.code) },
             modifier = Modifier.testTag("multi_strip_${asset.code}"),
-            color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, vaultColors.cardBorder),
+            color = vaultColors.glassSurface,
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(1.dp, vaultColors.glassBorder),
           ) {
             Row(
               modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -364,7 +391,7 @@ fun CalculatorScreen(
 
       Spacer(Modifier.height(10.dp))
 
-      // Quick Actions Row (Trade, Send, Escrow, History)
+      // Quick Actions Row (Trade, Send, Escrow, History) in iOS 27 Glass Capsules
       val preferredCryptoCode = if (baseAsset.category.name == "CRYPTO") baseAsset.code
       else if (targetAsset.category.name == "CRYPTO") targetAsset.code
       else "USDT"
@@ -377,7 +404,7 @@ fun CalculatorScreen(
         QuickCalcActionPill(
           icon = Icons.Rounded.CandlestickChart,
           label = "Trade",
-          accent = MaterialTheme.colorScheme.primary,
+          accent = vaultColors.gold,
           onClick = onSendToTrade,
           modifier = Modifier
             .weight(1f)
@@ -386,7 +413,7 @@ fun CalculatorScreen(
         QuickCalcActionPill(
           icon = Icons.AutoMirrored.Rounded.Send,
           label = "Send",
-          accent = vaultColors.gold,
+          accent = vaultColors.positive,
           onClick = { onOpenSendSheet(preferredCryptoCode, preferredCryptoAmt) },
           modifier = Modifier
             .weight(1f)
@@ -413,10 +440,10 @@ fun CalculatorScreen(
       }
 
       Spacer(Modifier.height(10.dp))
-      HorizontalDivider(color = vaultColors.cardBorder.copy(alpha = 0.5f))
+      HorizontalDivider(color = vaultColors.glassBorder)
       Spacer(Modifier.height(10.dp))
 
-      // Precision Tactile Spring-Bouncy Calculator Keypad
+      // Precision Apple iOS 27 Frosted Glass Keypad
       val smartParen = remember(calcState.expression) {
         val openCount = calcState.expression.count { it == '(' }
         val closeCount = calcState.expression.count { it == ')' }
@@ -444,15 +471,15 @@ fun CalculatorScreen(
               val isBackspace = keyLabel == "⌫"
 
               val containerColor = when {
-                isEquals -> MaterialTheme.colorScheme.primary
+                isEquals -> vaultColors.gold
                 isClear -> vaultColors.negativeContainer
-                isOperator -> MaterialTheme.colorScheme.surfaceContainerHigh
-                else -> MaterialTheme.colorScheme.surface
+                isOperator -> vaultColors.glassElevated
+                else -> vaultColors.glassSurface
               }
               val contentColor = when {
-                isEquals -> MaterialTheme.colorScheme.onPrimary
+                isEquals -> Color(0xFF1A1100)
                 isClear -> vaultColors.negative
-                isOperator -> MaterialTheme.colorScheme.primary
+                isOperator -> vaultColors.gold
                 else -> MaterialTheme.colorScheme.onSurface
               }
 
@@ -463,16 +490,21 @@ fun CalculatorScreen(
                 },
                 modifier = Modifier
                   .weight(1f)
-                  .height(56.dp)
+                  .height(55.dp)
                   .minimumInteractiveComponentSize()
                   .testTag("calc_key_$keyLabel"),
                 color = containerColor,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 border = if (isEquals) null else BorderStroke(
                   1.dp,
-                  if (isOperator) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else vaultColors.cardBorder,
+                  Brush.verticalGradient(
+                    colors = listOf(
+                      vaultColors.glassHighlight.copy(alpha = if (vaultColors.isDark) 0.20f else 0.85f),
+                      if (isOperator) vaultColors.gold.copy(alpha = 0.25f) else vaultColors.glassBorder,
+                    )
+                  ),
                 ),
-                shadowElevation = if (isEquals) 6.dp else 1.dp,
+                shadowElevation = if (isEquals) 8.dp else 2.dp,
                 pressedScale = 0.91f,
               ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -536,9 +568,9 @@ private fun QuickCalcActionPill(
   BouncySurface(
     onClick = onClick,
     modifier = modifier.minimumInteractiveComponentSize(),
-    color = MaterialTheme.colorScheme.surface,
-    shape = RoundedCornerShape(14.dp),
-    border = BorderStroke(1.dp, vaultColors.cardBorder),
+    color = vaultColors.glassSurface,
+    shape = RoundedCornerShape(50),
+    border = BorderStroke(1.dp, vaultColors.glassBorder),
   ) {
     Row(
       modifier = Modifier

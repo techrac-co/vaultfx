@@ -7,7 +7,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,14 +22,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.CallMade
 import androidx.compose.material.icons.automirrored.rounded.CallReceived
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AlternateEmail
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.QrCode2
@@ -80,9 +82,11 @@ import com.example.ui.components.AssetPickerSheet
 import com.example.ui.components.BouncySurface
 import com.example.ui.components.ChangeBadge
 import com.example.ui.components.GradientBorderSurface
+import com.example.ui.components.LiquidGlassCard
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.LocalVaultColors
 import com.example.util.NumberFormatter
+import com.example.util.UsernameValidator
 import com.example.util.WalletAddressHelper
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -99,6 +103,7 @@ fun WalletScreen(
   marketSnapshot: MarketSnapshot,
   pendingOfflineDebits: Map<String, Double> = emptyMap(),
   isBiometricProtected: Boolean = true,
+  onOpenCreateUsername: () -> Unit = {},
   onOpenSecuritySettings: () -> Unit = {},
   onOpenSend: (String?) -> Unit,
   onOpenReceive: (String?) -> Unit,
@@ -120,6 +125,9 @@ fun WalletScreen(
 
   val displayCode = profile?.preferredFiat ?: "USD"
   val displayAsset = AssetCatalog.find(displayCode)
+  val isPlaceholderUsername = remember(profile?.payTag) {
+    UsernameValidator.isGeneratedPlaceholder(profile?.payTag)
+  }
 
   val totalUsd = remember(holdings, marketSnapshot) {
     holdings.sumOf { it.balance * marketSnapshot.usdValueOf(it.assetCode) }
@@ -144,15 +152,15 @@ fun WalletScreen(
     LazyColumn(
       modifier = Modifier
         .fillMaxSize()
-        .widthIn(max = 620.dp),
-      contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        .widthIn(max = 640.dp),
+      contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-      // Hero Vault Portfolio Card
+      // Bybit Total Equity Hero Card in iOS 27 Liquid Glass
       item {
         GradientBorderSurface(
-          shape = RoundedCornerShape(26.dp),
-          borderColors = listOf(vaultColors.positive, vaultColors.cyan, vaultColors.violet),
+          shape = RoundedCornerShape(28.dp),
+          borderColors = listOf(vaultColors.gold, vaultColors.cyan, vaultColors.positive),
           modifier = Modifier.fillMaxWidth(),
         ) {
           Box(modifier = Modifier.fillMaxWidth()) {
@@ -168,8 +176,8 @@ fun WalletScreen(
                 .background(
                   Brush.verticalGradient(
                     colors = listOf(
-                      Color(0xC806080E),
-                      Color(0xEE0B1018),
+                      Color(0xD80B0E11),
+                      Color(0xF011161E),
                     ),
                   )
                 ),
@@ -182,22 +190,22 @@ fun WalletScreen(
                 verticalAlignment = Alignment.CenterVertically,
               ) {
                 Text(
-                  text = "TOTAL VAULT BALANCE",
+                  text = "TOTAL EQUITY",
                   style = MaterialTheme.typography.labelSmall,
                   color = Color(0xFF94A3B8),
                 )
                 BouncySurface(
                   onClick = { pickingDisplayFiat = true },
                   modifier = Modifier.testTag("wallet_display_fiat_pill"),
-                  color = Color(0xFF1F2A3B),
+                  color = Color(0xCC1E2531),
                   shape = RoundedCornerShape(50),
-                  border = BorderStroke(1.dp, Color(0xFF334155)),
+                  border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
                 ) {
                   Text(
                     text = "${displayAsset.code} ▾",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF2EFFA8),
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    color = Color(0xFFF7A600),
+                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
                   )
                 }
               }
@@ -219,46 +227,63 @@ fun WalletScreen(
               }
 
               if (profile != null && profile.payTag.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
-                BouncySurface(
-                  onClick = {
-                    clipboard.setText(AnnotatedString("@${profile.payTag}"))
-                    onCopyTagMessage("Copied PayTag @${profile.payTag}")
-                  },
-                  modifier = Modifier.testTag("wallet_copy_paytag"),
-                  color = Color(0x33FFCA4B),
-                  shape = RoundedCornerShape(10.dp),
+                Spacer(Modifier.height(8.dp))
+                Row(
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                  verticalAlignment = Alignment.CenterVertically,
                 ) {
-                  Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                  BouncySurface(
+                    onClick = {
+                      clipboard.setText(AnnotatedString("@${profile.payTag}"))
+                      onCopyTagMessage("Copied username @${profile.payTag}")
+                    },
+                    modifier = Modifier.testTag("wallet_copy_paytag"),
+                    color = Color(0x33F7A600),
+                    shape = RoundedCornerShape(50),
+                    border = BorderStroke(0.9.dp, Color(0x88F7A600)),
                   ) {
-                    Text(
-                      text = "PayTag: @${profile.payTag}",
-                      style = MaterialTheme.typography.labelSmall,
-                      color = Color(0xFFFFCA4B),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Icon(
-                      imageVector = Icons.Rounded.ContentCopy,
-                      contentDescription = "Copy PayTag",
-                      tint = Color(0xFFFFCA4B),
-                      modifier = Modifier.size(13.dp),
-                    )
+                    Row(
+                      modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                      verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                      Text(
+                        text = "@${profile.payTag}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                        color = Color(0xFFF7A600),
+                      )
+                      Spacer(Modifier.width(6.dp))
+                      Icon(
+                        imageVector = Icons.Rounded.ContentCopy,
+                        contentDescription = "Copy username",
+                        tint = Color(0xFFF7A600),
+                        modifier = Modifier.size(13.dp),
+                      )
+                    }
                   }
                 }
               }
 
               Spacer(Modifier.height(18.dp))
+              // Bybit Signature Action Row (Deposit, Send, Receive)
               Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
               ) {
                 WalletActionPill(
+                  icon = Icons.Rounded.Add,
+                  label = "Deposit",
+                  containerColor = Color(0xFFF7A600),
+                  contentColor = Color(0xFF1A1100),
+                  onClick = onOpenDeposit,
+                  modifier = Modifier
+                    .weight(1f)
+                    .testTag("wallet_deposit_button"),
+                )
+                WalletActionPill(
                   icon = Icons.AutoMirrored.Rounded.CallMade,
                   label = "Send",
-                  containerColor = Color(0xFF2EFFA8),
-                  contentColor = Color(0xFF032315),
+                  containerColor = Color(0xFF00C087),
+                  contentColor = Color(0xFF02261B),
                   onClick = { onOpenSend(null) },
                   modifier = Modifier
                     .weight(1f)
@@ -267,24 +292,82 @@ fun WalletScreen(
                 WalletActionPill(
                   icon = Icons.Rounded.QrCode2,
                   label = "Receive",
-                  containerColor = Color(0xFF1F2A3B),
+                  containerColor = Color(0xCC222A38),
                   contentColor = Color.White,
                   onClick = { onOpenReceive(null) },
                   modifier = Modifier
                     .weight(1f)
                     .testTag("wallet_receive_button"),
                 )
-                WalletActionPill(
-                  icon = Icons.Rounded.Add,
-                  label = "Deposit",
-                  containerColor = Color(0xFF1F2A3B),
-                  contentColor = Color(0xFFFFCA4B),
-                  onClick = onOpenDeposit,
-                  modifier = Modifier
-                    .weight(1f)
-                    .testTag("wallet_deposit_button"),
-                )
               }
+            }
+          }
+        }
+      }
+
+      // Dedicated Create / Customize Username Section Card
+      item {
+        LiquidGlassCard(
+          accentTint = vaultColors.gold,
+          shape = RoundedCornerShape(22.dp),
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("wallet_username_section_card"),
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Box(
+              modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(vaultColors.goldContainer),
+              contentAlignment = Alignment.Center,
+            ) {
+              Icon(
+                imageVector = if (isPlaceholderUsername) Icons.Rounded.AlternateEmail else Icons.Rounded.Edit,
+                contentDescription = null,
+                tint = vaultColors.gold,
+                modifier = Modifier.size(22.dp),
+              )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = if (isPlaceholderUsername) "Create Your @Username" else "Your Custom @Username",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+              )
+              Text(
+                text = if (isPlaceholderUsername) {
+                  "Claim a unique @handle for P2P, Smart Escrow & Offline transfers"
+                } else {
+                  "@${profile?.payTag.orEmpty()} • Verified peer handle"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+            Spacer(Modifier.width(8.dp))
+            Button(
+              onClick = onOpenCreateUsername,
+              shape = RoundedCornerShape(50),
+              colors = ButtonDefaults.buttonColors(
+                containerColor = if (isPlaceholderUsername) vaultColors.gold else MaterialTheme.colorScheme.primaryContainer,
+                contentColor = if (isPlaceholderUsername) Color(0xFF1A1100) else vaultColors.gold,
+              ),
+              contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+              modifier = Modifier.testTag("wallet_create_username_button"),
+            ) {
+              Text(
+                text = if (isPlaceholderUsername) "Create" else "Edit",
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+              )
             }
           }
         }
@@ -295,7 +378,7 @@ fun WalletScreen(
         item {
           Surface(
             color = vaultColors.negativeContainer,
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(20.dp),
             border = BorderStroke(1.dp, vaultColors.negative.copy(alpha = 0.5f)),
             modifier = Modifier.fillMaxWidth(),
           ) {
@@ -312,7 +395,7 @@ fun WalletScreen(
               Button(
                 onClick = onRetryInitialize,
                 colors = ButtonDefaults.buttonColors(containerColor = vaultColors.negative),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(50),
                 modifier = Modifier.testTag("wallet_retry_button"),
               ) {
                 Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -331,11 +414,11 @@ fun WalletScreen(
           modifier = Modifier
             .fillMaxWidth()
             .testTag("wallet_biometric_card"),
-          color = if (isBiometricProtected) vaultColors.cyan.copy(alpha = 0.12f) else vaultColors.goldContainer,
-          shape = RoundedCornerShape(18.dp),
+          color = vaultColors.glassSurface,
+          shape = RoundedCornerShape(22.dp),
           border = BorderStroke(
             1.1.dp,
-            if (isBiometricProtected) vaultColors.cyan.copy(alpha = 0.5f) else vaultColors.gold.copy(alpha = 0.6f),
+            if (isBiometricProtected) vaultColors.positive.copy(alpha = 0.5f) else vaultColors.gold.copy(alpha = 0.6f),
           ),
         ) {
           Row(
@@ -370,7 +453,7 @@ fun WalletScreen(
             Text(
               text = "Manage →",
               style = MaterialTheme.typography.labelLarge,
-              color = if (isBiometricProtected) vaultColors.cyan else vaultColors.gold,
+              color = if (isBiometricProtected) vaultColors.positive else vaultColors.gold,
             )
           }
         }
@@ -385,7 +468,7 @@ fun WalletScreen(
               .fillMaxWidth()
               .testTag("wallet_offline_alert"),
             color = vaultColors.goldContainer,
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(20.dp),
             border = BorderStroke(1.2.dp, vaultColors.gold.copy(alpha = 0.7f)),
           ) {
             Row(
@@ -426,9 +509,9 @@ fun WalletScreen(
             modifier = Modifier
               .fillMaxWidth()
               .testTag("wallet_escrow_alert"),
-            color = vaultColors.violet.copy(alpha = 0.16f),
-            shape = RoundedCornerShape(18.dp),
-            border = BorderStroke(1.2.dp, vaultColors.violet.copy(alpha = 0.7f)),
+            color = vaultColors.cyan.copy(alpha = 0.14f),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.2.dp, vaultColors.cyan.copy(alpha = 0.65f)),
           ) {
             Row(
               modifier = Modifier
@@ -466,7 +549,7 @@ fun WalletScreen(
           val asset = AssetCatalog.find(transfer.assetCode)
           Surface(
             color = vaultColors.positiveContainer,
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(20.dp),
             border = BorderStroke(1.dp, vaultColors.positive),
             modifier = Modifier.fillMaxWidth(),
           ) {
@@ -501,7 +584,7 @@ fun WalletScreen(
                   containerColor = vaultColors.positive,
                   contentColor = Color(0xFF042617),
                 ),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(50),
                 modifier = Modifier.testTag("claim_transfer_${transfer.id}"),
               ) {
                 Text("Claim", style = MaterialTheme.typography.labelLarge)
@@ -514,7 +597,7 @@ fun WalletScreen(
       // Holdings List
       item {
         Text(
-          text = "PORTFOLIO ASSETS",
+          text = "SPOT & FIAT ASSETS",
           style = MaterialTheme.typography.labelSmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -522,10 +605,8 @@ fun WalletScreen(
 
       if (holdings.isEmpty() && errorMsg == null) {
         item {
-          Surface(
-            color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(18.dp),
-            border = BorderStroke(1.dp, vaultColors.cardBorder),
+          LiquidGlassCard(
+            shape = RoundedCornerShape(22.dp),
             modifier = Modifier.fillMaxWidth(),
           ) {
             Column(
@@ -535,7 +616,7 @@ fun WalletScreen(
               Icon(
                 Icons.Rounded.AccountBalanceWallet,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = vaultColors.gold,
                 modifier = Modifier.size(30.dp),
               )
               Spacer(Modifier.height(8.dp))
@@ -547,10 +628,8 @@ fun WalletScreen(
         val nonZeroHoldings = holdings.filter { it.balance > 0.0 }
         if (nonZeroHoldings.isEmpty()) {
           item {
-            Surface(
-              color = MaterialTheme.colorScheme.surface,
-              shape = RoundedCornerShape(18.dp),
-              border = BorderStroke(1.dp, vaultColors.cardBorder),
+            LiquidGlassCard(
+              shape = RoundedCornerShape(22.dp),
               modifier = Modifier.fillMaxWidth(),
             ) {
               Column(
@@ -560,7 +639,7 @@ fun WalletScreen(
                 Icon(
                   Icons.Rounded.AccountBalanceWallet,
                   contentDescription = null,
-                  tint = MaterialTheme.colorScheme.primary,
+                  tint = vaultColors.gold,
                   modifier = Modifier.size(30.dp),
                 )
                 Spacer(Modifier.height(8.dp))
@@ -576,60 +655,60 @@ fun WalletScreen(
           }
         } else {
           items(nonZeroHoldings, key = { "hold_${it.assetCode}" }) { holding ->
-          val asset = AssetCatalog.find(holding.assetCode)
-          val valueInPreferred = marketSnapshot.convert(holding.balance, holding.assetCode, displayCode)
-          val chg = marketSnapshot.change24hPct[holding.assetCode] ?: 0.0
-          val isCrypto = asset.category.name == "CRYPTO"
+            val asset = AssetCatalog.find(holding.assetCode)
+            val valueInPreferred = marketSnapshot.convert(holding.balance, holding.assetCode, displayCode)
+            val chg = marketSnapshot.change24hPct[holding.assetCode] ?: 0.0
+            val isCrypto = asset.category.name == "CRYPTO"
 
-          BouncySurface(
-            onClick = {
-              if (isCrypto) onOpenReceive(holding.assetCode) else onOpenDeposit()
-            },
-            modifier = Modifier
-              .fillMaxWidth()
-              .testTag("holding_row_${holding.assetCode}"),
-            color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(18.dp),
-            border = BorderStroke(1.dp, vaultColors.cardBorder),
-            pressedScale = 0.98f,
-          ) {
-            Row(
+            BouncySurface(
+              onClick = {
+                if (isCrypto) onOpenReceive(holding.assetCode) else onOpenDeposit()
+              },
               modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-              verticalAlignment = Alignment.CenterVertically,
+                .testTag("holding_row_${holding.assetCode}"),
+              color = vaultColors.glassSurface,
+              shape = RoundedCornerShape(20.dp),
+              border = BorderStroke(1.dp, vaultColors.glassBorder),
+              pressedScale = 0.98f,
             ) {
-              AssetBadge(asset = asset, size = 38.dp)
-              Spacer(Modifier.width(12.dp))
-              Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                AssetBadge(asset = asset, size = 38.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                      text = asset.code,
+                      style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    ChangeBadge(changePct = chg)
+                  }
                   Text(
-                    text = asset.code,
+                    text = asset.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                  Text(
+                    text = "${NumberFormatter.formatAsset(holding.balance, asset.decimals)} ${asset.code}",
                     style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFontFamily),
                   )
-                  Spacer(Modifier.width(8.dp))
-                  ChangeBadge(changePct = chg)
+                  Text(
+                    text = "${displayAsset.symbol}${NumberFormatter.formatAsset(valueInPreferred, 2)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
                 }
-                Text(
-                  text = asset.name,
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-              }
-
-              Column(horizontalAlignment = Alignment.End) {
-                Text(
-                  text = "${NumberFormatter.formatAsset(holding.balance, asset.decimals)} ${asset.code}",
-                  style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                )
-                Text(
-                  text = "${displayAsset.symbol}${NumberFormatter.formatAsset(valueInPreferred, 2)}",
-                  style = MaterialTheme.typography.labelSmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
               }
             }
-          }
           }
         }
       }
@@ -637,7 +716,7 @@ fun WalletScreen(
       // Transaction Activity Ledger
       item {
         Text(
-          text = "TRANSACTION ACTIVITY",
+          text = "ASSET ACTIVITY",
           style = MaterialTheme.typography.labelSmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.padding(top = 6.dp),
@@ -646,10 +725,8 @@ fun WalletScreen(
 
       if (transactions.isEmpty()) {
         item {
-          Surface(
-            color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(18.dp),
-            border = BorderStroke(1.dp, vaultColors.cardBorder),
+          LiquidGlassCard(
+            shape = RoundedCornerShape(20.dp),
             modifier = Modifier.fillMaxWidth(),
           ) {
             Text(
@@ -682,10 +759,8 @@ fun WalletScreen(
             SimpleDateFormat("MMM d, HH:mm", Locale.US).format(tx.createdAt?.toDate() ?: Date())
           }
 
-          Surface(
-            color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.dp, vaultColors.cardBorder),
+          LiquidGlassCard(
+            shape = RoundedCornerShape(18.dp),
             modifier = Modifier.fillMaxWidth(),
           ) {
             Row(
@@ -771,7 +846,7 @@ private fun WalletActionPill(
     onClick = onClick,
     modifier = modifier.minimumInteractiveComponentSize(),
     color = containerColor,
-    shape = RoundedCornerShape(14.dp),
+    shape = RoundedCornerShape(50),
   ) {
     Row(
       modifier = Modifier

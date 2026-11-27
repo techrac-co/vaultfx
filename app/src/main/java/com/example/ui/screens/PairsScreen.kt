@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,7 +38,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,8 +47,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -67,17 +63,17 @@ import com.example.ui.components.AssetPickerSheet
 import com.example.ui.components.BouncySurface
 import com.example.ui.components.ChangeBadge
 import com.example.ui.components.CurrencySelectorPill
-import com.example.ui.components.GradientBorderSurface
+import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.MarketSparkline
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.LocalVaultColors
 import com.example.util.NumberFormatter
 
 enum class PairFilter(val label: String) {
-  ALL("All Pairs"),
-  FIAT("Dollar & FX"),
-  CRYPTO("Crypto Pairs"),
-  PINNED("Pinned"),
+  ALL("All Markets"),
+  FIAT("Fiat & FX"),
+  CRYPTO("Spot Crypto"),
+  PINNED("Favorites"),
 }
 
 @Composable
@@ -146,41 +142,27 @@ fun PairsScreen(
     LazyColumn(
       modifier = Modifier
         .fillMaxSize()
-        .widthIn(max = 620.dp),
-      contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        .widthIn(max = 640.dp),
+      contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-      // Glowing Spotlight Pair Converter Card
+      // Apple iOS 27 Liquid Glass Spotlight Pair Converter Card
       item {
-        GradientBorderSurface(
-          containerColor = MaterialTheme.colorScheme.surface,
-          shape = RoundedCornerShape(24.dp),
-          borderColors = listOf(vaultColors.gold.copy(alpha = 0.7f), vaultColors.cyan.copy(alpha = 0.6f)),
+        LiquidGlassCard(
+          accentTint = vaultColors.gold,
+          shape = RoundedCornerShape(26.dp),
           modifier = Modifier.fillMaxWidth(),
         ) {
-          Column(
-            modifier = Modifier
-              .fillMaxWidth()
-              .background(
-                Brush.linearGradient(
-                  colors = listOf(
-                    vaultColors.gold.copy(alpha = 0.08f),
-                    vaultColors.cyan.copy(alpha = 0.06f),
-                    Color.Transparent,
-                  )
-                )
-              )
-              .padding(16.dp),
-          ) {
+          Column(modifier = Modifier.padding(16.dp)) {
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically,
             ) {
               Text(
-                text = "PAIR CONVERTER",
+                text = "MARKET PAIR CONVERTER",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
+                color = vaultColors.gold,
               )
               Row(verticalAlignment = Alignment.CenterVertically) {
                 ChangeBadge(changePct = spotlightChange)
@@ -221,7 +203,7 @@ fun PairsScreen(
                 Icon(
                   imageVector = Icons.Rounded.SwapHoriz,
                   contentDescription = "Swap pair currencies",
-                  tint = MaterialTheme.colorScheme.primary,
+                  tint = vaultColors.gold,
                   modifier = Modifier.graphicsLayer { rotationZ = swapRotation },
                 )
               }
@@ -261,7 +243,7 @@ fun PairsScreen(
                 Text(
                   text = "1 $spotlightBase = ${NumberFormatter.formatRate(spotlightRate)} $spotlightQuote",
                   style = MaterialTheme.typography.labelSmall,
-                  color = MaterialTheme.colorScheme.primary,
+                  color = vaultColors.gold,
                 )
               }
 
@@ -290,7 +272,7 @@ fun PairsScreen(
                 label = { Text("Amount ($spotlightBase)") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                   .weight(1f)
                   .testTag("pair_amount_input"),
@@ -300,18 +282,18 @@ fun PairsScreen(
                 BouncySurface(
                   onClick = { amountText = preset },
                   modifier = Modifier.testTag("pair_preset_$preset"),
-                  color = if (amountText == preset) MaterialTheme.colorScheme.primaryContainer
-                  else MaterialTheme.colorScheme.surfaceVariant,
-                  shape = RoundedCornerShape(12.dp),
+                  color = if (amountText == preset) vaultColors.goldContainer
+                  else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                  shape = RoundedCornerShape(50),
                   border = BorderStroke(
                     1.dp,
-                    if (amountText == preset) MaterialTheme.colorScheme.primary else vaultColors.cardBorder,
+                    if (amountText == preset) vaultColors.gold else vaultColors.glassBorder,
                   ),
                 ) {
                   Text(
                     text = preset,
                     style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFontFamily),
-                    color = if (amountText == preset) MaterialTheme.colorScheme.primary
+                    color = if (amountText == preset) vaultColors.gold
                     else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
                   )
@@ -322,7 +304,7 @@ fun PairsScreen(
         }
       }
 
-      // Search & Filter Chips
+      // Search & Filter Pills
       item {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
           OutlinedTextField(
@@ -331,7 +313,7 @@ fun PairsScreen(
             placeholder = { Text("Check USD to Naira, USD to GBP (GDP), BTC...") },
             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
             singleLine = true,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(50),
             modifier = Modifier
               .fillMaxWidth()
               .testTag("pairs_search_input"),
@@ -347,6 +329,7 @@ fun PairsScreen(
               FilterChip(
                 selected = selectedFilter == filter,
                 onClick = { selectedFilter = filter },
+                shape = RoundedCornerShape(50),
                 label = { Text(filter.label) },
                 modifier = Modifier.testTag("pair_filter_${filter.name.lowercase()}"),
               )
@@ -357,10 +340,8 @@ fun PairsScreen(
 
       if (filteredPairs.isEmpty()) {
         item {
-          Surface(
-            color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(18.dp),
-            border = BorderStroke(1.dp, vaultColors.cardBorder),
+          LiquidGlassCard(
+            shape = RoundedCornerShape(22.dp),
             modifier = Modifier.fillMaxWidth(),
           ) {
             Column(
@@ -404,11 +385,11 @@ fun PairsScreen(
             modifier = Modifier
               .fillMaxWidth()
               .testTag("pair_row_${base}_$quote"),
-            color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(18.dp),
+            color = vaultColors.glassSurface,
+            shape = RoundedCornerShape(20.dp),
             border = BorderStroke(
               width = if (isSpotlight) 1.3.dp else 1.dp,
-              color = if (isSpotlight) MaterialTheme.colorScheme.primary else vaultColors.cardBorder,
+              color = if (isSpotlight) vaultColors.gold else vaultColors.glassBorder,
             ),
             pressedScale = 0.98f,
           ) {
@@ -468,7 +449,7 @@ fun PairsScreen(
                 Icon(
                   imageVector = Icons.Rounded.Calculate,
                   contentDescription = "Open $base/$quote in calculator",
-                  tint = MaterialTheme.colorScheme.primary,
+                  tint = vaultColors.gold,
                   modifier = Modifier.size(20.dp),
                 )
               }

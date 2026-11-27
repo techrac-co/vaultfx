@@ -993,6 +993,7 @@ fun ProfileSheet(
   userEmail: String?,
   securitySettings: VaultSecuritySettings = VaultSecuritySettings(),
   hardwareStatus: BiometricHardwareStatus = BiometricHardwareStatus.UNAVAILABLE,
+  onOpenCreateUsername: () -> Unit = {},
   onToggleAppLock: (Boolean) -> Unit = {},
   onToggleTxConfirmation: (Boolean) -> Unit = {},
   onOpenSetupPin: () -> Unit = {},
@@ -1005,6 +1006,7 @@ fun ProfileSheet(
   val vaultColors = LocalVaultColors.current
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val payTag = profile?.payTag?.takeIf { it.isNotBlank() }
+  val isPlaceholderTag = remember(payTag) { com.example.util.UsernameValidator.isGeneratedPlaceholder(payTag) }
   val canUseBiometrics = hardwareStatus == BiometricHardwareStatus.BIOMETRIC_READY ||
     hardwareStatus == BiometricHardwareStatus.DEVICE_CREDENTIAL_ONLY
 
@@ -1034,8 +1036,8 @@ fun ProfileSheet(
       Spacer(Modifier.height(10.dp))
       Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(1.dp, vaultColors.cardBorder),
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, vaultColors.glassHighlight.copy(alpha = 0.35f)),
         modifier = Modifier.fillMaxWidth(),
       ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1050,13 +1052,41 @@ fun ProfileSheet(
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
           }
-          if (payTag != null) {
-            Spacer(Modifier.height(6.dp))
-            Text(
-              text = "VaultFX PayTag: @$payTag",
-              style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFontFamily),
-              color = vaultColors.gold,
-            )
+          Spacer(Modifier.height(12.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+              Text(
+                text = "USERNAME HANDLE",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+              Text(
+                text = if (payTag != null) "@$payTag" else "Not set yet",
+                style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                color = vaultColors.gold,
+              )
+            }
+            Button(
+              onClick = {
+                onDismiss()
+                onOpenCreateUsername()
+              },
+              shape = RoundedCornerShape(50),
+              colors = ButtonDefaults.buttonColors(
+                containerColor = if (isPlaceholderTag) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                contentColor = if (isPlaceholderTag) MaterialTheme.colorScheme.onPrimary else vaultColors.gold,
+              ),
+              modifier = Modifier.testTag("profile_create_username_button"),
+            ) {
+              Text(
+                text = if (isPlaceholderTag) "Create Username" else "Edit",
+                style = MaterialTheme.typography.labelLarge,
+              )
+            }
           }
         }
       }

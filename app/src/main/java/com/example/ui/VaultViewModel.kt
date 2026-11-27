@@ -51,11 +51,11 @@ sealed interface UiState<out T> {
 
 enum class MainTab(val label: String) {
   CALCULATOR("Calc"),
-  PAIRS("Pairs"),
+  PAIRS("Markets"),
   TRADE("Trade"),
   ESCROW("Escrow"),
   OFFLINE("Offline"),
-  WALLET("Wallet"),
+  WALLET("Assets"),
 }
 
 data class CalculatorUiState(
@@ -107,6 +107,9 @@ class VaultViewModel(
 
   private val _isSubmittingEscrow = MutableStateFlow(false)
   val isSubmittingEscrow: StateFlow<Boolean> = _isSubmittingEscrow.asStateFlow()
+
+  private val _isUpdatingUsername = MutableStateFlow(false)
+  val isUpdatingUsername: StateFlow<Boolean> = _isUpdatingUsername.asStateFlow()
 
   private val _inFlightOps = MutableStateFlow<Set<String>>(emptySet())
 
@@ -538,6 +541,31 @@ class VaultViewModel(
     viewModelScope.launch {
       repository.updatePreferredFiat(currentUserId, fiatCode)
         .onFailure { _events.tryEmit(it.localizedMessage ?: "Failed to update display currency") }
+    }
+  }
+
+  suspend fun checkUsernameAvailability(rawUsername: String): Result<VaultRepository.UsernameAvailability> =
+    repository.checkUsernameAvailability(rawUsername, currentUserId)
+
+  fun claimUsername(
+    rawUsername: String,
+    newDisplayName: String?,
+    onSuccess: (String) -> Unit,
+  ) {
+    viewModelScope.launch {
+      _isUpdatingUsername.value = true
+      try {
+        repository.claimUsername(currentUserId, rawUsername, newDisplayName)
+          .onSuccess { tag ->
+            _events.tryEmit("Username @$tag is now active")
+            onSuccess(tag)
+          }
+          .onFailure { err ->
+            _events.tryEmit(err.localizedMessage ?: "Failed to update username")
+          }
+      } finally {
+        _isUpdatingUsername.value = false
+      }
     }
   }
 
